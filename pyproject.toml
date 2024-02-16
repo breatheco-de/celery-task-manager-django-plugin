@@ -7,16 +7,13 @@ name = "task-manager"
 dynamic = ["version"]
 description = ''
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = "LGPL-3.0-or-later"
 keywords = []
 authors = [{ name = "jefer94", email = "jdefreitaspinto@gmail.com" }]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: Implementation :: CPython",
@@ -25,9 +22,9 @@ classifiers = [
 dependencies = ["django"]
 
 [project.urls]
-Documentation = "https://github.com/unknown/task-manager#readme"
-Issues = "https://github.com/unknown/task-manager/issues"
-Source = "https://github.com/unknown/task-manager"
+Documentation = "https://github.com/breatheco-de/celery-task-manager-django-plugin#readme"
+Issues = "https://github.com/breatheco-de/celery-task-manager-django-plugin/issues"
+Source = "https://github.com/breatheco-de/celery-task-manager-django-plugin"
 
 [tool.hatch.version]
 path = "src/task_manager/__about__.py"
@@ -51,7 +48,7 @@ generate_docs = "mkdocs build"
 docs_deploy = "mkdocs gh-deploy -c"
 
 [[tool.hatch.envs.all.matrix]]
-python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
+python = ["3.11", "3.12"]
 
 [tool.hatch.envs.types]
 dependencies = ["mypy>=1.0.0"]
