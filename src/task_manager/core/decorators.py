@@ -218,7 +218,7 @@ class Task(object):
                 update["last_run"] = last_run
 
                 if attempts:
-                    update["last_run"] = attempts + 1
+                    update["attempts"] = attempts + 1
 
                 self._update_task_manager(x, **update)
                 update = {}
