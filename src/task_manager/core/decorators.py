@@ -236,14 +236,14 @@ class Task(object):
                 with self._get_transaction_context(x):
                     sid = self._get_transaction_id(x)
                     try:
-                        res = self._execute(self, x, function, task_module, task_name, *args, **kwargs)
+                        res = self._execute(x, function, task_module, task_name, *args, **kwargs)
 
                     except Exception as e:
                         self._manage_exceptions(e, x, arguments, sid=sid, *args, **kwargs)
 
             else:
                 try:
-                    res = self._execute(self, x, function, task_module, task_name, *args, **kwargs)
+                    res = self._execute(x, function, task_module, task_name, *args, **kwargs)
 
                 except Exception as e:
                     self._manage_exceptions(e, x, arguments, *args, **kwargs)
