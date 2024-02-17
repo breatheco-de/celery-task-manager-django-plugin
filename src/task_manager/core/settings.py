@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 
 from .exceptions import ProgrammingError
@@ -9,7 +10,11 @@ settings = {
     "RETRY_AFTER": timedelta(seconds=5),
     "DEFAULT": 5,
     "SCHEDULER": 10,
+    "TASK_MANAGER": 6,
 }
+
+if p := os.environ.get("TASK_MANAGER_PRIORITY"):
+    settings["TASK_MANAGER"] = int(p)
 
 
 def get_setting(key, default=None):

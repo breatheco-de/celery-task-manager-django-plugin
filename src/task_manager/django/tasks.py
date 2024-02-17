@@ -5,7 +5,7 @@ from datetime import timedelta
 from celery import shared_task
 from django.utils import timezone
 
-from task_manager.core.decorators import TaskPriority
+from task_manager.core.settings import get_setting
 
 from .models import TaskManager
 
@@ -15,7 +15,7 @@ TOLERANCE = 10
 
 
 # do not use our own task decorator
-@shared_task(bind=False, priority=TaskPriority.TASK_MANAGER.value)
+@shared_task(bind=False, priority=get_setting("TASK_MANAGER"))
 def mark_task_as_cancelled(task_manager_id):
     logger.info(f"Running mark_task_as_cancelled for {task_manager_id}")
 
