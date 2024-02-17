@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "task-manager"
+name = "celery-task-manager"
 dynamic = ["version"]
 description = ''
 readme = "README.md"
@@ -19,12 +19,15 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = ["django"]
+dependencies = ["celery"]
 
 [project.urls]
 Documentation = "https://github.com/breatheco-de/celery-task-manager-django-plugin#readme"
 Issues = "https://github.com/breatheco-de/celery-task-manager-django-plugin/issues"
 Source = "https://github.com/breatheco-de/celery-task-manager-django-plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/task_manager"]
 
 [tool.hatch.version]
 path = "src/task_manager/__about__.py"
@@ -69,7 +72,7 @@ tests = ["tests", "*/task-manager/tests"]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
 
 [project.optional-dependencies]
-celery = ["celery"]
+django = ["django"]
 circuitbreaker = ["circuitbreaker"]
 
 [tool.black]

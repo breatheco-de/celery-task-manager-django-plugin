@@ -13,7 +13,7 @@
 ## Installation
 
 ```console
-pip install task-manager
+pip install celery-task-manager
 ```
 
 ## License
