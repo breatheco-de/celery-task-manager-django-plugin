@@ -5,8 +5,7 @@ import sys
 
 
 def main():
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "task_manager.django.settings")
-    # os.environ.setdefault("DJANGO_SETTINGS_MODULE", "task_manager.task_manager.settings")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "task_manager.settings")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

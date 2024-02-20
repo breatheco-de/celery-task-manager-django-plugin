@@ -3,4 +3,4 @@ from django.apps import AppConfig
 
 class TaskManagerConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "task_manager.django"
+    name = "task_manager"
