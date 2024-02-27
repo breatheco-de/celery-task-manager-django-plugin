@@ -22,8 +22,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # "mixer.backend.django",
     "task_manager",
 ]
+
+# MIXER_DEFAULTS = {
+#     "commit": False,  # Disable database commit by default for tests
+# }
+
 
 MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",

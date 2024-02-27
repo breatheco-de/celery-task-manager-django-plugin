@@ -102,7 +102,12 @@ class Task(object):
         if not function:
             return None, None
 
-        module_name = inspect.getmodule(function).__name__
+        if hasattr(function, "__module__"):
+            module_name = function.__module__
+
+        else:
+            module_name = inspect.getmodule(function).__name__
+
         function_name = function.__name__
 
         return module_name, function_name
@@ -233,20 +238,26 @@ class Task(object):
 
             res = None
             if self.is_transaction is True:
+                error = None
                 with self._get_transaction_context(x):
-                    sid = self._get_transaction_id(x)
+                    self.transaction_id = self._get_transaction_id(x)
                     try:
                         res = self._execute(x, function, task_module, task_name, *args, **kwargs)
 
                     except Exception as e:
-                        self._manage_exceptions(e, x, arguments, sid=sid, *args, **kwargs)
+                        error = e
+                        if type(e) not in [RetryTask, AbortTask]:
+                            self._rollback_transaction(x, self.transaction_id)
+
+                if error:
+                    return self._manage_exceptions(error, x, arguments, *args, **kwargs)
 
             else:
                 try:
                     res = self._execute(x, function, task_module, task_name, *args, **kwargs)
 
                 except Exception as e:
-                    self._manage_exceptions(e, x, arguments, *args, **kwargs)
+                    return self._manage_exceptions(e, x, arguments, *args, **kwargs)
 
             if x.total_pages == x.current_page:
                 self._update_task_manager(x, status="DONE")
@@ -266,9 +277,7 @@ class Task(object):
             self._update_task_manager(x, status_message="")
             return function(*args, **kwargs)
 
-    def _manage_exceptions(
-        self, e: Exception, x: TaskManager, arguments: dict, transaction: bool = False, *args, **kwargs
-    ):
+    def _manage_exceptions(self, e: Exception, x: TaskManager, arguments: dict, *args, **kwargs):
         error = None
 
         if isinstance(e, CircuitBreakerError):
@@ -282,6 +291,7 @@ class Task(object):
                     status="ERROR",
                     exception_module=e.__class__.__module__,
                     exception_name=e.__class__.__name__,
+                    status_message=str(e)[:255],
                 )
 
             else:
@@ -307,6 +317,7 @@ class Task(object):
                     status="ERROR",
                     exception_module=e.__class__.__module__,
                     exception_name=e.__class__.__name__,
+                    status_message=str(e)[:255],
                 )
 
             else:
@@ -322,6 +333,8 @@ class Task(object):
             self._update_task_manager(
                 x,
                 status="ABORTED",
+                exception_module=e.__class__.__module__,
+                exception_name=e.__class__.__name__,
                 status_message=str(e)[:255],
             )
 
@@ -334,19 +347,19 @@ class Task(object):
         else:
             traceback.print_exc()
 
-            self._rollback_transaction(x, self.transaction_id)
-
             error = str(e)[:255]
             exception = e
 
             logger.exception(str(e))
 
         if error:
+
             self._update_task_manager(
                 x,
                 status="ERROR",
                 exception_module=e.__class__.__module__,
                 exception_name=e.__class__.__name__,
+                status_message=str(error)[:255],
             )
 
             # fallback

@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
 
-from breathecode.commons import tasks
-from breathecode.notify.actions import send_email_message
+# from breathecode.notify.actions import send_email_message
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 from django.utils import timezone
+
+from task_manager.django import tasks
 
 from ...models import TaskManager, TaskWatcher
 

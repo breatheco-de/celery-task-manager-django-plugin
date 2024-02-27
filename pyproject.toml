@@ -36,13 +36,19 @@ path = "src/task_manager/__about__.py"
 dependencies = [
   "coverage[toml]>=6.5",
   "pytest",
+  "pytest-django",
   "celery",
   "circuitbreaker",
   "mkdocs",
   "mkdocs-material",
+  "mixer",
+  "faker",
+  "django",
+  "pytest-celery",
+  "celery[pytest]",
 ]
 [tool.hatch.envs.default.scripts]
-test = "pytest {args:tests}"
+test = "pytest {args:tests}  --nomigrations --durations=1"
 test-cov = "coverage run -m pytest {args:tests}"
 cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
@@ -77,3 +83,25 @@ circuitbreaker = ["circuitbreaker"]
 
 [tool.black]
 line-length = 120
+
+# [tool.pytest.ini_options]
+# DJANGO_SETTINGS_MODULE = "test.settings"
+# # -- recommended but optional:
+# python_files = ["test_*.py", "*_test.py", "testing/python/*.py"]
+
+###
+[tool.pytest.ini_options]
+django_debug_mode = true
+addopts = ["-p", "no:legacypath", "--tb=short"]
+DJANGO_SETTINGS_MODULE = "task_manager.settings"
+# python_files = ["breathecode/**/*.tests.py", "breathecode/**/*.tests_*.py"]
+
+# [tool.pytest]
+# env =
+#     ENV=test
+
+filterwarnings = [
+  # faker is passing a naive datetime to django
+  "ignore::RuntimeWarning:django.db.models.fields.*",
+  "ignore::DeprecationWarning:pkg_resources.*",
+]
