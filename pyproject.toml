@@ -48,8 +48,8 @@ dependencies = [
   "celery[pytest]",
 ]
 [tool.hatch.envs.default.scripts]
-test = "pytest {args:tests}  --nomigrations --durations=1"
-test-cov = "coverage run -m pytest {args:tests}"
+test = "pytest {args:tests} --nomigrations --durations=1"
+test-cov = "coverage run -m pytest {args:tests} --nomigrations --durations=1"
 cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
 docs = "mkdocs serve --livereload"
