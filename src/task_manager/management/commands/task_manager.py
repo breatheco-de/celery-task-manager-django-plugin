@@ -45,14 +45,14 @@ class Command(BaseCommand):
     help = "Rerun all the tasks that are pending and were run in the last 10 minutes"
 
     def handle(self, *args, **options):
-        self.utc_now = datetime.utcnow()
+        self.utc_now = timezone.now()
+
         self.clean_older_tasks()
         self.rerun_pending_tasks()
         # self.daily_report()
 
     def clean_older_tasks(self):
-        date_limit = timezone.now() - timedelta(days=2)
-
+        date_limit = self.utc_now - timedelta(days=2)
         webhooks = TaskManager.objects.filter(created_at__lt=date_limit)
         count = webhooks.count()
         webhooks.delete()
@@ -61,6 +61,7 @@ class Command(BaseCommand):
 
     def rerun_pending_tasks(self):
         tolerance = timedelta(minutes=TOLERANCE)
+
         ids = TaskManager.objects.filter(last_run__lt=self.utc_now - tolerance, status="PENDING").values_list(
             "id", flat=True
         )

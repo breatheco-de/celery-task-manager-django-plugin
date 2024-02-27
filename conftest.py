@@ -464,8 +464,8 @@ def utc_now(set_datetime):
 
 @pytest.fixture
 def set_datetime(monkeypatch):
-
     def patch(new_datetime):
         monkeypatch.setattr(timezone, "now", lambda: new_datetime)
+        monkeypatch.setattr(_fake, "date_time", lambda: new_datetime)
 
     yield patch
