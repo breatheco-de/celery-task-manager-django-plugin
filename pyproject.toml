@@ -41,7 +41,6 @@ dependencies = [
   "circuitbreaker",
   "mkdocs",
   "mkdocs-material",
-  "mixer",
   "faker",
   "django",
   "pytest-celery",
@@ -84,12 +83,6 @@ circuitbreaker = ["circuitbreaker"]
 [tool.black]
 line-length = 120
 
-# [tool.pytest.ini_options]
-# DJANGO_SETTINGS_MODULE = "test.settings"
-# # -- recommended but optional:
-# python_files = ["test_*.py", "*_test.py", "testing/python/*.py"]
-
-###
 [tool.pytest.ini_options]
 django_debug_mode = true
 addopts = ["-p", "no:legacypath", "--tb=short"]
