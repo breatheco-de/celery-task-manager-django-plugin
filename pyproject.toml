@@ -12,17 +12,22 @@ license = "LGPL-3.0-or-later"
 keywords = []
 authors = [{ name = "jefer94", email = "jdefreitaspinto@gmail.com" }]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
+  "Framework :: Django :: 4.2",
+  "Framework :: Django :: 5.0",
+  "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+  "Topic :: Software Development :: Libraries",
 ]
 dependencies = ["celery"]
 
 [project.urls]
-Documentation = "https://github.com/breatheco-de/celery-task-manager-django-plugin#readme"
+Documentation = "https://breatheco-de.github.io/celery-task-manager-django-plugin/"
 Issues = "https://github.com/breatheco-de/celery-task-manager-django-plugin/issues"
 Source = "https://github.com/breatheco-de/celery-task-manager-django-plugin"
 

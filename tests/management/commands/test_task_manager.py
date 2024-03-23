@@ -41,7 +41,7 @@ def arrange(database, fake):
 
 @pytest.fixture
 def patch(monkeypatch):
-    def handler(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False):
+    def handler(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False, run_scheduled_tasks=False):
         if clean_older_tasks is False:
             monkeypatch.setattr("task_manager.management.commands.task_manager.Command.clean_older_tasks", MagicMock())
 
@@ -52,6 +52,11 @@ def patch(monkeypatch):
 
         if daily_report is False:
             monkeypatch.setattr("task_manager.management.commands.task_manager.Command.daily_report", MagicMock())
+
+        if run_scheduled_tasks is False:
+            monkeypatch.setattr(
+                "task_manager.management.commands.task_manager.Command.run_scheduled_tasks", MagicMock()
+            )
 
     return handler
 

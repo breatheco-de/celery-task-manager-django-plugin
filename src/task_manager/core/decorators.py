@@ -4,11 +4,12 @@ import inspect
 import logging
 import traceback
 from datetime import datetime
-from decimal import Decimal
 from typing import Any, Callable, Optional
 
 import celery
 from django.utils import timezone
+
+from task_manager.core.actions import get_fn_desc, parse_payload
 
 from .exceptions import AbortTask, ProgrammingError, RetryTask
 from .settings import settings
@@ -25,31 +26,6 @@ except ImportError:
 
     class CircuitBreakerError(Exception):
         pass
-
-
-def parse_payload(payload: dict):
-    if not isinstance(payload, dict):
-        return payload
-
-    for key in payload.keys():
-        # TypeError("string indices must be integers, not 'str'")
-        if isinstance(payload[key], datetime):
-            payload[key] = payload[key].isoformat().replace("+00:00", "Z")
-
-        elif isinstance(payload[key], Decimal):
-            payload[key] = str(payload[key])
-
-        elif isinstance(payload[key], list) or isinstance(payload[key], tuple) or isinstance(payload[key], set):
-            array = []
-            for item in payload[key]:
-                array.append(parse_payload(item))
-
-            payload[key] = array
-
-        elif isinstance(payload[key], dict):
-            payload[key] = parse_payload(payload[key])
-
-    return payload
 
 
 class TaskManager:
@@ -97,20 +73,6 @@ class Task(object):
             raise ProgrammingError("Reverse must be a callable")
 
         self.parent_decorator = celery.shared_task(*args, **kwargs)
-
-    def get_fn_desc(self, function: Callable) -> tuple[str, str] | tuple[None, None]:
-        if not function:
-            return None, None
-
-        if hasattr(function, "__module__"):
-            module_name = function.__module__
-
-        else:
-            module_name = inspect.getmodule(function).__name__
-
-        function_name = function.__name__
-
-        return module_name, function_name
 
     def _get_fn(self, task_module: str, task_name: str) -> Callable | None:
         module = importlib.import_module(task_module)
@@ -175,8 +137,8 @@ class Task(object):
 
         @functools.wraps(function)
         def wrapper(*args, **kwargs):
-            task_module, task_name = self.get_fn_desc(function)
-            reverse_module, reverse_name = self.get_fn_desc(self.reverse)
+            task_module, task_name = get_fn_desc(function)
+            reverse_module, reverse_name = get_fn_desc(self.reverse)
             arguments = parse_payload(
                 {
                     "args": args[1:] if self.bind else args,

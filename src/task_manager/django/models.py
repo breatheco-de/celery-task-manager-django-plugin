@@ -1,24 +1,26 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
-PENDING = 'PENDING'
-DONE = 'DONE'
-CANCELLED = 'CANCELLED'
-REVERSED = 'REVERSED'
-PAUSED = 'PAUSED'
-ABORTED = 'ABORTED'
-ERROR = 'ERROR'
-SCHEDULED = 'SCHEDULED'
+PENDING = "PENDING"
+DONE = "DONE"
+CANCELLED = "CANCELLED"
+REVERSED = "REVERSED"
+PAUSED = "PAUSED"
+ABORTED = "ABORTED"
+ERROR = "ERROR"
+SCHEDULED = "SCHEDULED"
 TASK_STATUS = (
-    (PENDING, 'Pending'),
-    (DONE, 'Done'),
-    (CANCELLED, 'Cancelled'),
-    (REVERSED, 'Reversed'),
-    (PAUSED, 'Paused'),
-    (ABORTED, 'Aborted'),
-    (ERROR, 'Error'),
-    (SCHEDULED, 'Scheduled'),
+    (PENDING, "Pending"),
+    (DONE, "Done"),
+    (CANCELLED, "Cancelled"),
+    (REVERSED, "Reversed"),
+    (PAUSED, "Paused"),
+    (ABORTED, "Aborted"),
+    (ERROR, "Error"),
+    (SCHEDULED, "Scheduled"),
 )
 
 
@@ -39,7 +41,7 @@ class TaskManager(models.Model):
     arguments = models.JSONField(default=dict, blank=True, null=True)
     status = models.CharField(max_length=20, choices=TASK_STATUS, default=PENDING)
     status_message = models.TextField(blank=True, null=True, max_length=255)
-    task_id = models.CharField(max_length=36, default='', blank=True)
+    task_id = models.CharField(max_length=36, default="", blank=True)
 
     killed = models.BooleanField(default=False)
     last_run = models.DateTimeField()
@@ -49,7 +51,7 @@ class TaskManager(models.Model):
     updated_at = models.DateTimeField(auto_now=True, editable=False)
 
     def __str__(self):
-        return self.task_module + '.' + self.task_name + ' ' + str(self.arguments)
+        return self.task_module + "." + self.task_name + " " + str(self.arguments)
 
     def clean(self) -> None:
         if self.started_at is None and self.status == PENDING:
@@ -64,10 +66,9 @@ class TaskManager(models.Model):
 
 class TaskWatcher(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    tasks = models.ManyToManyField(TaskManager,
-                                   blank=True,
-                                   related_name='watchers',
-                                   help_text='Notify for the progress of these tasks')
+    tasks = models.ManyToManyField(
+        TaskManager, blank=True, related_name="watchers", help_text="Notify for the progress of these tasks"
+    )
 
     email = models.EmailField(blank=True, null=True)
 
@@ -77,3 +78,35 @@ class TaskWatcher(models.Model):
 
     def __str__(self):
         return self.user.email
+
+
+PENDING = "PENDING"
+DONE = "DONE"
+CANCELLED = "CANCELLED"
+SCHEDULED_TASK_STATUS = (
+    (PENDING, "Pending"),
+    (DONE, "Done"),
+    (CANCELLED, "Cancelled"),
+)
+
+
+class ScheduledTask(models.Model):
+    task_module = models.CharField(max_length=200)
+    task_name = models.CharField(max_length=200)
+
+    arguments = models.JSONField(default=dict, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=SCHEDULED_TASK_STATUS, default=PENDING)
+
+    eta = models.DateTimeField(help_text="Estimated time of arrival")
+    duration = models.DurationField(blank=False, default=timedelta, help_text="Duration of the session")
+
+    ran_at = models.DateTimeField(default=None, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    def __str__(self):
+        return self.task_module + "." + self.task_name + " " + str(self.arguments)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)

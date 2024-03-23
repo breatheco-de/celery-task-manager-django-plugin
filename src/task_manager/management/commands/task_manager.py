@@ -1,4 +1,7 @@
+import importlib
 from datetime import datetime, timedelta
+
+from celery import Task
 
 # from breathecode.notify.actions import send_email_message
 from django.core.management.base import BaseCommand
@@ -6,6 +9,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from task_manager.django import tasks
+from task_manager.django.models import ScheduledTask
 
 from ...models import TaskManager, TaskWatcher
 
@@ -50,14 +54,46 @@ class Command(BaseCommand):
         self.clean_older_tasks()
         self.rerun_pending_tasks()
         # self.daily_report()
+        self.run_scheduled_tasks()
 
     def clean_older_tasks(self):
-        date_limit = self.utc_now - timedelta(days=2)
-        webhooks = TaskManager.objects.filter(created_at__lt=date_limit)
-        count = webhooks.count()
-        webhooks.delete()
 
-        self.stdout.write(self.style.SUCCESS(f"Successfully deleted {str(count)} TaskManager's"))
+        date_limit = self.utc_now - timedelta(days=5)
+        errors = TaskManager.objects.filter(created_at__lt=date_limit, status="ERROR")
+
+        date_limit = self.utc_now - timedelta(days=2)
+        alright = TaskManager.objects.filter(created_at__lt=date_limit).exclude(status="ERROR")
+
+        count_errors = errors.count()
+        count_alright = alright.count()
+        errors.delete()
+        alright.delete()
+
+        self.stdout.write(self.style.SUCCESS(f"Successfully deleted {str(count_errors + count_alright)} TaskManager's"))
+
+    def run_scheduled_tasks(self):
+        modules = {}
+        cache: dict[str, dict[str, Task]] = {}
+        scheduled_tasks = ScheduledTask.objects.filter(status="PENDING", eta__lte=self.utc_now)
+
+        for scheduled_task in scheduled_tasks:
+            if scheduled_task.task_module not in cache:
+                cache[scheduled_task.task_module] = {}
+
+            if scheduled_task.task_name not in cache[scheduled_task.task_module]:
+                if scheduled_task.task_module not in modules:
+                    modules[scheduled_task.task_module] = importlib.import_module(scheduled_task.task_module)
+
+                module = modules[scheduled_task.task_module]
+                function = getattr(module, scheduled_task.task_name)
+                cache[scheduled_task.task_module][scheduled_task.task_name] = function
+
+            handler = cache[scheduled_task.task_module][scheduled_task.task_name]
+            handler.delay(*scheduled_task.arguments["args"], **scheduled_task.arguments["kwargs"])
+
+        scheduled_tasks.update(status="DONE")
+
+        self.stdout.write(self.style.SUCCESS(f"Successfully scheduled {str(scheduled_tasks.count())} Tasks"))
 
     def rerun_pending_tasks(self):
         tolerance = timedelta(minutes=TOLERANCE)
