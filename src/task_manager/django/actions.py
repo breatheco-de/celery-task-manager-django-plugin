@@ -69,8 +69,3 @@ def schedule_task(task: Callable, eta: str) -> Callable[..., None]:
         )
 
     return create_schedule_instance
-
-
-aaa = schedule_task()
-
-aaa()

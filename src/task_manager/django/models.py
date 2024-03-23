@@ -100,7 +100,6 @@ class ScheduledTask(models.Model):
     eta = models.DateTimeField(help_text="Estimated time of arrival")
     duration = models.DurationField(blank=False, default=timedelta, help_text="Duration of the session")
 
-    ran_at = models.DateTimeField(default=None, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True, editable=False)
 
