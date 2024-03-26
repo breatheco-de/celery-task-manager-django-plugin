@@ -3,10 +3,12 @@ from datetime import timedelta
 from unittest.mock import MagicMock, call
 
 import pytest
+from django.db.models import QuerySet
 from django.utils import timezone
 from faker import Faker
 
 from task_manager.django.actions import ScheduledTaskManager, schedule_task
+from task_manager.django.models import ScheduledTask
 
 # enable this file to use the database
 pytestmark = pytest.mark.usefixtures("db")
@@ -255,6 +257,7 @@ class TestScheduleTaskManager:
         ]
 
     @pytest.mark.asyncio
+    @pytest.mark.django_db(reset_sequences=True)
     async def test_acall(self, get_args, get_kwargs, database, set_datetime):
         now = timezone.now()
         set_datetime(now)
@@ -295,3 +298,305 @@ class TestScheduleTaskManager:
                 "task_name": "Task",
             },
         ]
+
+    def test_exists__no_scheduled(self, get_args, get_kwargs, database, set_datetime):
+        now = timezone.now()
+        set_datetime(now)
+
+        args = get_args(3)
+        kwargs = get_kwargs(3)
+
+        unit = random.choice(UNITS)
+        n = random.randint(1, 100)
+
+        x = ScheduledTaskManager(Task, str(n) + unit)
+        y = x.exists(*args, **kwargs)
+
+        assert y is False
+
+        assert isinstance(x, ScheduledTaskManager)
+        assert x._eta_unit == unit
+        assert x._eta_number == n
+        assert x._eta == f"{n}{unit}"
+        assert x._module_name == "tests.django.actions.test_schedule_task"
+        assert x._function_name == "Task"
+
+        # it will be checked
+        assert callable(x._handler)
+
+        assert x._handler(n) == DELTA_UNITS[unit](n)
+        assert database.list_of("task_manager.ScheduledTask") == []
+
+    @pytest.mark.parametrize("delta", [1, 2, 3, 4])
+    def test_exists__scheduled(self, get_args, get_kwargs, database, set_datetime, delta, get_json_obj):
+        now = timezone.now()
+        set_datetime(now)
+
+        args = get_args(3)
+        kwargs = get_kwargs(3)
+
+        unit = random.choice(UNITS)
+        n = random.randint(1, 100)
+
+        model = database.create(
+            scheduled_task={
+                "arguments": {
+                    "args": list(args),
+                    "kwargs": kwargs,
+                },
+                "eta": now + timedelta(minutes=delta),
+                "id": 1,
+                "status": "PENDING",
+                "task_module": "tests.django.actions.test_schedule_task",
+                "task_name": "Task",
+            }
+        )
+
+        x = ScheduledTaskManager(Task, str(n) + unit)
+        y = x.exists(*args, **kwargs)
+
+        assert y is True
+
+        assert isinstance(x, ScheduledTaskManager)
+        assert x._eta_unit == unit
+        assert x._eta_number == n
+        assert x._eta == f"{n}{unit}"
+        assert x._module_name == "tests.django.actions.test_schedule_task"
+        assert x._function_name == "Task"
+
+        # it will be checked
+        assert callable(x._handler)
+
+        assert x._handler(n) == DELTA_UNITS[unit](n)
+        assert database.list_of("task_manager.ScheduledTask") == [get_json_obj(model.scheduled_task)]
+
+    @pytest.mark.asyncio
+    @pytest.mark.django_db(reset_sequences=True)
+    async def test_aexists__no_scheduled(self, get_args, get_kwargs, database, set_datetime):
+        now = timezone.now()
+        set_datetime(now)
+
+        args = get_args(3)
+        kwargs = get_kwargs(3)
+
+        unit = random.choice(UNITS)
+        n = random.randint(1, 100)
+
+        x = ScheduledTaskManager(Task, str(n) + unit)
+        y = await x.aexists(*args, **kwargs)
+
+        assert y is False
+
+        assert isinstance(x, ScheduledTaskManager)
+        assert x._eta_unit == unit
+        assert x._eta_number == n
+        assert x._eta == f"{n}{unit}"
+        assert x._module_name == "tests.django.actions.test_schedule_task"
+        assert x._function_name == "Task"
+
+        # it will be checked
+        assert callable(x._handler)
+
+        assert x._handler(n) == DELTA_UNITS[unit](n)
+        assert await database.alist_of("task_manager.ScheduledTask") == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.django_db(reset_sequences=True)
+    @pytest.mark.parametrize("delta", [1, 2, 3, 4])
+    async def test_aexists__scheduled(self, get_args, get_kwargs, database, set_datetime, delta, get_json_obj):
+        now = timezone.now()
+        set_datetime(now)
+
+        args = get_args(3)
+        kwargs = get_kwargs(3)
+
+        unit = random.choice(UNITS)
+        n = random.randint(1, 100)
+
+        model = await database.acreate(
+            scheduled_task={
+                "arguments": {
+                    "args": list(args),
+                    "kwargs": kwargs,
+                },
+                "eta": now + timedelta(minutes=delta),
+                "id": 1,
+                "status": "PENDING",
+                "task_module": "tests.django.actions.test_schedule_task",
+                "task_name": "Task",
+            }
+        )
+
+        x = ScheduledTaskManager(Task, str(n) + unit)
+        y = await x.aexists(*args, **kwargs)
+
+        assert y is True
+
+        assert isinstance(x, ScheduledTaskManager)
+        assert x._eta_unit == unit
+        assert x._eta_number == n
+        assert x._eta == f"{n}{unit}"
+        assert x._module_name == "tests.django.actions.test_schedule_task"
+        assert x._function_name == "Task"
+
+        # it will be checked
+        assert callable(x._handler)
+
+        assert x._handler(n) == DELTA_UNITS[unit](n)
+        assert await database.alist_of("task_manager.ScheduledTask") == [get_json_obj(model.scheduled_task)]
+
+    def test_filter__no_scheduled(self, get_args, get_kwargs, database, set_datetime):
+        now = timezone.now()
+        set_datetime(now)
+
+        args = get_args(3)
+        kwargs = get_kwargs(3)
+
+        unit = random.choice(UNITS)
+        n = random.randint(1, 100)
+
+        x = ScheduledTaskManager(Task, str(n) + unit)
+        y = x.filter(*args, **kwargs)
+
+        assert isinstance(y, QuerySet)
+        assert len(y) == 0
+
+        assert isinstance(x, ScheduledTaskManager)
+        assert x._eta_unit == unit
+        assert x._eta_number == n
+        assert x._eta == f"{n}{unit}"
+        assert x._module_name == "tests.django.actions.test_schedule_task"
+        assert x._function_name == "Task"
+
+        # it will be checked
+        assert callable(x._handler)
+
+        assert x._handler(n) == DELTA_UNITS[unit](n)
+        assert database.list_of("task_manager.ScheduledTask") == []
+
+    @pytest.mark.parametrize("delta", [1, 2, 3, 4])
+    def test_filter__many_scheduled(self, get_args, get_kwargs, database, set_datetime, delta, get_json_obj):
+        now = timezone.now()
+        set_datetime(now)
+
+        args = get_args(3)
+        kwargs = get_kwargs(3)
+
+        unit = random.choice(UNITS)
+        n = random.randint(1, 100)
+
+        model = database.create(
+            scheduled_task=(
+                2,
+                {
+                    "arguments": {
+                        "args": list(args),
+                        "kwargs": kwargs,
+                    },
+                    "eta": now + timedelta(minutes=delta),
+                    "status": "PENDING",
+                    "task_module": "tests.django.actions.test_schedule_task",
+                    "task_name": "Task",
+                },
+            )
+        )
+
+        x = ScheduledTaskManager(Task, str(n) + unit)
+        y = x.filter(*args, **kwargs)
+
+        assert isinstance(y, QuerySet)
+        assert len(y) == 2
+        assert [x.id for x in y] == [1, 2]
+
+        assert isinstance(x, ScheduledTaskManager)
+        assert x._eta_unit == unit
+        assert x._eta_number == n
+        assert x._eta == f"{n}{unit}"
+        assert x._module_name == "tests.django.actions.test_schedule_task"
+        assert x._function_name == "Task"
+
+        # it will be checked
+        assert callable(x._handler)
+
+        assert x._handler(n) == DELTA_UNITS[unit](n)
+        assert database.list_of("task_manager.ScheduledTask") == get_json_obj(model.scheduled_task)
+
+    @pytest.mark.asyncio
+    @pytest.mark.django_db(reset_sequences=True)
+    async def test_afilter__no_scheduled(self, get_args, get_kwargs, database, set_datetime):
+        now = timezone.now()
+        set_datetime(now)
+
+        args = get_args(3)
+        kwargs = get_kwargs(3)
+
+        unit = random.choice(UNITS)
+        n = random.randint(1, 100)
+
+        x = ScheduledTaskManager(Task, str(n) + unit)
+        y = await x.afilter(*args, **kwargs)
+
+        assert isinstance(y, QuerySet)
+        assert await y.acount() == 0
+
+        assert isinstance(x, ScheduledTaskManager)
+        assert x._eta_unit == unit
+        assert x._eta_number == n
+        assert x._eta == f"{n}{unit}"
+        assert x._module_name == "tests.django.actions.test_schedule_task"
+        assert x._function_name == "Task"
+
+        # it will be checked
+        assert callable(x._handler)
+
+        assert x._handler(n) == DELTA_UNITS[unit](n)
+        assert await database.alist_of("task_manager.ScheduledTask") == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.django_db(reset_sequences=True)
+    @pytest.mark.parametrize("delta", [1, 2, 3, 4])
+    async def test_afilter__many_scheduled(self, get_args, get_kwargs, database, set_datetime, delta, get_json_obj):
+        now = timezone.now()
+        set_datetime(now)
+
+        args = get_args(3)
+        kwargs = get_kwargs(3)
+
+        unit = random.choice(UNITS)
+        n = random.randint(1, 100)
+
+        model = await database.acreate(
+            scheduled_task=(
+                2,
+                {
+                    "arguments": {
+                        "args": list(args),
+                        "kwargs": kwargs,
+                    },
+                    "eta": now + timedelta(minutes=delta),
+                    "status": "PENDING",
+                    "task_module": "tests.django.actions.test_schedule_task",
+                    "task_name": "Task",
+                },
+            )
+        )
+
+        x = ScheduledTaskManager(Task, str(n) + unit)
+        y = await x.afilter(*args, **kwargs)
+
+        assert isinstance(y, QuerySet)
+        assert await y.acount() == 2
+        assert [x.id async for x in y] == [1, 2]
+
+        assert isinstance(x, ScheduledTaskManager)
+        assert x._eta_unit == unit
+        assert x._eta_number == n
+        assert x._eta == f"{n}{unit}"
+        assert x._module_name == "tests.django.actions.test_schedule_task"
+        assert x._function_name == "Task"
+
+        # it will be checked
+        assert callable(x._handler)
+
+        assert x._handler(n) == DELTA_UNITS[unit](n)
+        assert await database.alist_of("task_manager.ScheduledTask") == get_json_obj(model.scheduled_task)

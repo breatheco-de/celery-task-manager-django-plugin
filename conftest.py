@@ -324,6 +324,11 @@ def database(db):
             return create(**models)
 
         @classmethod
+        @sync_to_async
+        def acreate(self, **models):
+            return create(**models)
+
+        @classmethod
         def get_model(cls, path: str) -> Model:
             """
             Return the model matching the given app_label and model_name.

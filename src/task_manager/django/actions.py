@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import Any, Callable
 
 from asgiref.sync import sync_to_async
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from task_manager.core.actions import get_fn_desc, parse_payload
@@ -18,7 +19,7 @@ DELTA_UNITS = {
 
 
 class ScheduledTaskManager:
-    def __init__(self, task: Callable, eta: str):
+    def __init__(self, task: Callable, eta: str) -> None:
         self._task = task
 
         if callable(task) is False:
@@ -31,7 +32,7 @@ class ScheduledTaskManager:
 
         self._module_name, self._function_name = get_fn_desc(task)
 
-    def _set_eta(self, eta: str):
+    def _set_eta(self, eta: str) -> None:
         self._eta = eta
         self._eta_number = eta[:-1]
         self._eta_unit = eta[-1]
@@ -45,13 +46,13 @@ class ScheduledTaskManager:
         if self._handler is None:
             raise ValueError(f"ETA unit must be one of {', '.join(DELTA_UNITS.keys())}.")
 
-    def __call__(self, *args: Any, **kwargs: Any):
+    def __call__(self, *args: Any, **kwargs: Any) -> None:
         return self.call(*args, **kwargs)
 
-    def _get_delta(self):
+    def _get_delta(self) -> timedelta:
         return self._handler(self._eta_number)
 
-    def call(self, *args: Any, **kwargs: Any):
+    def call(self, *args: Any, **kwargs: Any) -> None:
         delta = self._get_delta()
 
         now = timezone.now()
@@ -71,13 +72,40 @@ class ScheduledTaskManager:
         )
 
     @sync_to_async
-    def acall(self, *args: Any, **kwargs: Any):
+    def acall(self, *args: Any, **kwargs: Any) -> None:
         return self.call(*args, **kwargs)
 
-    def copy(self):
+    def filter(self, *args: Any, **kwargs: Any) -> QuerySet[ScheduledTask]:
+        now = timezone.now()
+        arguments = parse_payload(
+            {
+                "args": args,
+                "kwargs": kwargs,
+            }
+        )
+
+        return ScheduledTask.objects.filter(
+            task_module=self._module_name,
+            task_name=self._function_name,
+            arguments=arguments,
+            eta__gte=now,
+        )
+
+    @sync_to_async
+    def afilter(self, *args: Any, **kwargs: Any) -> QuerySet[ScheduledTask]:
+        return self.filter(*args, **kwargs)
+
+    def exists(self, *args: Any, **kwargs: Any) -> bool:
+        return self.filter(*args, **kwargs).exists()
+
+    @sync_to_async
+    def aexists(self, *args: Any, **kwargs: Any) -> bool:
+        return self.exists(*args, **kwargs)
+
+    def copy(self) -> "ScheduledTaskManager":
         return ScheduledTaskManager(self._task, self._eta)
 
-    def eta(self, eta, overwrite=False):
+    def eta(self, eta, overwrite=False) -> "ScheduledTaskManager":
         if overwrite:
             self._set_eta(eta)
             schedule_task.cache_clear()
