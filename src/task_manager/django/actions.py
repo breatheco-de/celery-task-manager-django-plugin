@@ -87,7 +87,7 @@ class ScheduledTaskManager:
 
 
 @lru_cache
-def schedule_task(task: Callable, eta: str) -> Callable[..., None]:
+def schedule_task(task: Callable, eta: str) -> ScheduledTaskManager:
     """
     Schedule a task, it returns a scheduled task manager.
 
