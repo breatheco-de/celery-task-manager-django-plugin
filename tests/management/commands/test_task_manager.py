@@ -20,6 +20,10 @@ rerun_pending_tasks = {
     "long_delta_list": [timedelta(minutes=n * 2) for n in range(16, 30)],
 }
 
+run_scheduled_tasks = {
+    "short_delta_list": [timedelta(minutes=n * 2) for n in range(1, 3)],
+}
+
 
 @pytest.fixture(autouse=True)
 def setup(db, monkeypatch):
@@ -30,10 +34,10 @@ def setup(db, monkeypatch):
 
 
 @pytest.fixture
-def arrange(database, fake):
+def arrange(database):
 
-    def _arrange(n, data={}):
-        model = database.create(task_manager=(n, data))
+    def _arrange(n1, data1={}, n2=0, data2={}):
+        model = database.create(task_manager=(n1, data1), scheduled_task=(n2, data2))
         return model
 
     yield _arrange
@@ -214,4 +218,156 @@ def test_rerun_pending_tasks__with_2__all_tasks_is_old(
 
     captured = capsys.readouterr()
     assert captured.out == "Rerunning TaskManager's 1, 2\n"
+    assert captured.err == ""
+
+
+# When: 0 ScheduledTask's
+# Then: nothing happens
+def testrun_scheduled_tasks__has_not_any_scheduled(database, arrange, set_datetime, capsys, patch, get_json_obj):
+    patch(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False, run_scheduled_tasks=True)
+
+    utc_now = timezone.now()
+    set_datetime(utc_now)
+
+    model = arrange(0, {})
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+    assert tasks.mark_task_as_pending.delay.call_args_list == []
+
+    captured = capsys.readouterr()
+    assert captured.out == "Successfully scheduled 0 Tasks\n"
+    assert captured.err == ""
+
+
+# When: 2 ScheduledTask's, all them in the past
+# Then: remove all scheduled tasks, schedule the execution before it
+@pytest.mark.parametrize("delta", run_scheduled_tasks["short_delta_list"])
+def testrun_scheduled_tasks__all_them_pending_in_the_past(
+    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, get_args, get_kwargs
+):
+    patch(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False, run_scheduled_tasks=True)
+
+    utc_now = timezone.now()
+    set_datetime(utc_now)
+    args = get_args(3)
+    kwargs = get_kwargs(3)
+
+    model = arrange(
+        0,
+        {},
+        2,
+        {
+            "status": "PENDING",
+            "eta": utc_now - delta,
+            "task_module": "task_manager.django.tasks",
+            "task_name": "mark_task_as_pending",
+            "arguments": {
+                "args": list(args),
+                "kwargs": kwargs,
+            },
+        },
+    )
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+    assert database.list_of("task_manager.ScheduledTask") == []
+
+    assert tasks.mark_task_as_pending.delay.call_args_list == [call(*args, **kwargs) for _ in range(2)]
+
+    captured = capsys.readouterr()
+    assert captured.out == "Successfully scheduled 2 Tasks\n"
+    assert captured.err == ""
+
+
+# When: 2 ScheduledTask's, all them in the past
+# Then: remove all scheduled tasks
+@pytest.mark.parametrize("status", ["DONE", "CANCELLED"])
+@pytest.mark.parametrize("delta", run_scheduled_tasks["short_delta_list"])
+def testrun_scheduled_tasks__all_them_not_pending_in_the_past(
+    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, get_args, get_kwargs, status
+):
+    patch(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False, run_scheduled_tasks=True)
+
+    utc_now = timezone.now()
+    set_datetime(utc_now)
+    args = get_args(3)
+    kwargs = get_kwargs(3)
+
+    model = arrange(
+        0,
+        {},
+        2,
+        {
+            "status": status,
+            "eta": utc_now - delta,
+            "task_module": "task_manager.django.tasks",
+            "task_name": "mark_task_as_pending",
+            "arguments": {
+                "args": list(args),
+                "kwargs": kwargs,
+            },
+        },
+    )
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+    assert database.list_of("task_manager.ScheduledTask") == []
+
+    assert tasks.mark_task_as_pending.delay.call_args_list == []
+
+    captured = capsys.readouterr()
+    assert captured.out == "Successfully scheduled 0 Tasks\n"
+    assert captured.err == ""
+
+
+# When: 2 ScheduledTask's, all them in the past
+# Then: remove all scheduled tasks
+@pytest.mark.parametrize("delta", run_scheduled_tasks["short_delta_list"])
+def testrun_scheduled_tasks__all_them_pending_in_the_future(
+    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, get_args, get_kwargs
+):
+    patch(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False, run_scheduled_tasks=True)
+
+    utc_now = timezone.now()
+    set_datetime(utc_now)
+    args = get_args(3)
+    kwargs = get_kwargs(3)
+
+    model = arrange(
+        0,
+        {},
+        2,
+        {
+            "status": "PENDING",
+            "eta": utc_now + delta,
+            "task_module": "task_manager.django.tasks",
+            "task_name": "mark_task_as_pending",
+            "arguments": {
+                "args": list(args),
+                "kwargs": kwargs,
+            },
+        },
+    )
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+    assert database.list_of("task_manager.ScheduledTask") == get_json_obj(model.scheduled_task)
+
+    assert tasks.mark_task_as_pending.delay.call_args_list == []
+
+    captured = capsys.readouterr()
+    assert captured.out == "Successfully scheduled 0 Tasks\n"
     assert captured.err == ""

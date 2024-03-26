@@ -76,6 +76,7 @@ class Command(BaseCommand):
         cache: dict[str, dict[str, Task]] = {}
         scheduled_tasks = ScheduledTask.objects.filter(status="PENDING", eta__lte=self.utc_now)
         cancelled_tasks = ScheduledTask.objects.exclude(status="PENDING")
+        scheduled = 0
 
         for scheduled_task in scheduled_tasks:
             if scheduled_task.task_module not in cache:
@@ -91,11 +92,12 @@ class Command(BaseCommand):
 
             handler = cache[scheduled_task.task_module][scheduled_task.task_name]
             handler.delay(*scheduled_task.arguments["args"], **scheduled_task.arguments["kwargs"])
+            scheduled += 1
 
         scheduled_tasks.delete()
         cancelled_tasks.delete()
 
-        self.stdout.write(self.style.SUCCESS(f"Successfully scheduled {str(scheduled_tasks.count())} Tasks"))
+        self.stdout.write(self.style.SUCCESS(f"Successfully scheduled {scheduled} Tasks"))
 
     def rerun_pending_tasks(self):
         tolerance = timedelta(minutes=TOLERANCE)

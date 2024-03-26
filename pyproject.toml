@@ -50,6 +50,7 @@ dependencies = [
   "django",
   "pytest-celery",
   "celery[pytest]",
+  "pytest-asyncio",
 ]
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests} --nomigrations --durations=1"

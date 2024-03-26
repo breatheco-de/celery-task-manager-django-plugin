@@ -5,11 +5,11 @@ import functools
 # the rest of your Celery file contents go here
 import random
 import re
-from datetime import datetime
 from typing import Any, TypeVar
 
 # keeps this adobe
 import pytest
+from asgiref.sync import sync_to_async
 from celery import Celery
 from django.apps import apps
 from django.conf import settings
@@ -383,6 +383,30 @@ def database(db):
                 result = [_remove_dinamics_fields(data.__dict__) for data in result]
 
             return result
+
+        @classmethod
+        @sync_to_async
+        def alist_of(cls, path: str, dict: bool = True) -> list[Model | dict[str, Any]]:
+            """
+            This is a wrapper for `Model.objects.filter()`, get a list of values of models as `list[dict]` if
+            `dict=True` else get a list of `Model` instances.
+
+            Usage:
+
+            ```py
+            # get all the Cohort as list of dict
+            self.bc.database.get('admissions.Cohort')
+
+            # get all the Cohort as list of instances of model
+            self.bc.database.get('admissions.Cohort', dict=False)
+            ```
+
+            Keywords arguments:
+            - path(`str`): path to a model, for example `admissions.CohortUser`.
+            - dict(`bool`): if true return dict of values of model else return model instance.
+            """
+
+            return cls.list_of(path, dict)
 
     return Database
 
