@@ -25,6 +25,11 @@ theme:
 # this define the order of menu
 nav:
     - "index.md"
+    - Getting started:
+      - "getting-started/installation.md"
+      - "getting-started/set-up.md"
+      - "getting-started/task.md"
+      - "getting-started/schedule-tasks.md"
 
 plugins:
     - search

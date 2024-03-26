@@ -1,3 +1,3 @@
-# Welcome
+# What does this
 
-Here you should find all related to apiv2 project that serves [4geeks.com](https://4geeks.com) and [4geeksacademy.com](https://4geeksacademy.com/us/index), I will recommend you that read these articles in order.
+Celery Task Manager was made by [4geeks.com](https://4geeks.com) to watch the activity of Celery, and it is used to see which tasks have bugs, this task provides an extra layer to avoid forgetting any data due to some Redis shutdown that should remove all tasks scheduled.
