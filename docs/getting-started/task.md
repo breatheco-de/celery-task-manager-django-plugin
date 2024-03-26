@@ -1,6 +1,6 @@
 # Task
 
-`task` is a regular decorator that wraps a Celery `shared_task` to use Task manager. It could track and monitorize your tasks executions and protect your tasks queue against a Redis shutdown process.
+`task` is a regular decorator that wraps a Celery `shared_task` to use Task Manager. It could track and monitor your tasks executions and protect your task queue against a Redis shutdown process.
 
 ## Parameters
 
@@ -52,11 +52,11 @@ Abort the execution of this task, because the requirements were not met.
 
 ### RetryTask
 
-Mark this task to be retried, due to the database does not includes the required content yet.
+Mark this task to be retried, due to the database does not include the required content yet.
 
 ### CircuitBreakerError
 
-Mark this task to be retried. due an error occurred in another service.
+Mark this task to be retried. due to an error that occurred in another service.
 
 ## See all executions in Django Admin
 

@@ -1,10 +1,10 @@
 # Schedule Tasks
 
-You should schedule a execution to be executed after a provided time, you need to have set-up `task_manager` command to use this feature. It is used frequently to get sure that the execution will be executed even if Redis was shutdown.
+You should schedule a execution to be executed after a provided time, you need to have set-up `task_manager` command to use this feature. It is used frequently to make sure that the execution will be executed even if Redis was turned off.
 
 ## Using `schedule_task`
 
-It returns a instance of `ScheduledTaskManager`.
+It returns an instance of `ScheduledTaskManager`.
 
 ## arguments
 

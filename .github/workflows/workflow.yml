@@ -52,7 +52,7 @@ jobs:
 
   pages:
     if: >-
-      github.repository == 'breatheco-de/linked-services-django-plugin' &&
+      github.repository == 'breatheco-de/celery-task-manager-django-plugin' &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
 
