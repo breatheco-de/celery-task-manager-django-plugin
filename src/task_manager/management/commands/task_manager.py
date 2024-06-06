@@ -77,11 +77,9 @@ class Command(BaseCommand):
     def clean_older_tasks(self):
 
         date_limit = self.utc_now - timedelta(days=5)
-        # print("errors =", TaskManager.objects.filter(created_at__lt=date_limit, status="ERROR"))
         errors = TaskManager.objects.filter(created_at__lt=date_limit, status="ERROR")
 
         date_limit = self.utc_now - timedelta(days=2)
-        # print("alright =", TaskManager.objects.filter(created_at__lt=date_limit).exclude(status="ERROR"))
         alright = TaskManager.objects.filter(created_at__lt=date_limit).exclude(
             Q(status="ERROR") | Q(status="PENDING") | Q(status="SCHEDULED") | Q(status="PAUSED")
         )
