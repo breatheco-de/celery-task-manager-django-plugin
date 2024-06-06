@@ -121,7 +121,7 @@ def test_clean_older_tasks__with_2__all_tasks_is_old(database, arrange, set_date
 
     utc_now = timezone.now()
 
-    _ = arrange(2)
+    _ = arrange(2, {"status": "DONE"})
 
     set_datetime(utc_now + delta)
 
@@ -130,6 +130,28 @@ def test_clean_older_tasks__with_2__all_tasks_is_old(database, arrange, set_date
 
     assert res is None
     assert database.list_of("task_manager.TaskManager") == []
+
+
+# When: 2 TaskManager's, all tasks is old
+# Then: remove all tasks
+@pytest.mark.parametrize("delta", clean_older_tasks["long_delta_list"][:1])
+@pytest.mark.parametrize("status", ["PENDING", "PAUSED", "SCHEDULED"])
+def test_clean_older_tasks__with_2__all_tasks_is_old__but_these_statuses_cannot_be_deleted(
+    database, arrange, set_datetime, delta, patch, status, get_json_obj
+):
+    patch(clean_older_tasks=True, rerun_pending_tasks=False, daily_report=False)
+
+    utc_now = timezone.now()
+
+    model = arrange(2, {"status": status})
+
+    set_datetime(utc_now + delta)
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
 
 
 # When: 0 TaskManager's

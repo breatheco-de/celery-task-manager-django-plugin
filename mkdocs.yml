@@ -30,6 +30,8 @@ nav:
       - "getting-started/set-up.md"
       - "getting-started/task.md"
       - "getting-started/schedule-tasks.md"
+    - Changelog:
+      - "changelog/v1.5.0.md"
 
 plugins:
     - search

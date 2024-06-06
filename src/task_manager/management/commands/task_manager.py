@@ -6,9 +6,8 @@ from celery import Task
 
 # from breathecode.notify.actions import send_email_message
 from django.core.management.base import BaseCommand
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.utils import timezone
-from django.db.models import QuerySet
 
 from task_manager.django import tasks
 from task_manager.django.models import ScheduledTask
@@ -68,22 +67,29 @@ class Command(BaseCommand):
 
         while True:
             to_delete = qs[0:limit]
+            pks = to_delete.values_list("pk")
 
-            if to_delete.count() == 0:
+            if len(pks) == 0:
                 break
 
-            to_delete.delete()
+            qs.filter(pk__in=pks).delete()
 
     def clean_older_tasks(self):
 
         date_limit = self.utc_now - timedelta(days=5)
+        # print("errors =", TaskManager.objects.filter(created_at__lt=date_limit, status="ERROR"))
         errors = TaskManager.objects.filter(created_at__lt=date_limit, status="ERROR")
 
         date_limit = self.utc_now - timedelta(days=2)
-        alright = TaskManager.objects.filter(created_at__lt=date_limit).exclude(Q(status="ERROR") | Q(status="PENDING"))
+        # print("alright =", TaskManager.objects.filter(created_at__lt=date_limit).exclude(status="ERROR"))
+        alright = TaskManager.objects.filter(created_at__lt=date_limit).exclude(
+            Q(status="ERROR") | Q(status="PENDING") | Q(status="SCHEDULED") | Q(status="PAUSED")
+        )
 
         count_errors = errors.count()
         count_alright = alright.count()
+        print(errors)
+        print(alright)
         self.delete_items(errors)
         self.delete_items(alright)
 
@@ -119,7 +125,8 @@ class Command(BaseCommand):
                 handler.delay(*scheduled_task.arguments["args"], **scheduled_task.arguments["kwargs"])
                 scheduled += 1
 
-            scheduled_tasks.delete()
+            pks = scheduled_tasks.values_list("pk", flat=True)
+            ScheduledTask.objects.filter(pk__in=pks).delete()
 
         self.delete_items(cancelled_tasks)
 
@@ -129,7 +136,7 @@ class Command(BaseCommand):
         tolerance = timedelta(minutes=TOLERANCE)
 
         task_managers = TaskManager.objects.filter(last_run__lt=self.utc_now - tolerance, status="PENDING")
-        if count := task_managers.count() == 0:
+        if (count := task_managers.count()) == 0:
             msg = self.style.SUCCESS("No TaskManager's available to re-run")
             self.stdout.write(self.style.SUCCESS(msg))
             return
@@ -139,10 +146,11 @@ class Command(BaseCommand):
         page = 0
 
         while True:
+            a = page * limit
+
             if a >= count:
                 break
 
-            a = page * limit
             page += 1
             b = page * limit
 
