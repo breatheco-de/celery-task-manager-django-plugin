@@ -51,6 +51,7 @@ dependencies = [
   "pytest-celery",
   "celery[pytest]",
   "pytest-asyncio",
+  "asgiref",
 ]
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests} --nomigrations --durations=1"
