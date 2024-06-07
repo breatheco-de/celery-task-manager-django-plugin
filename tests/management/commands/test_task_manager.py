@@ -221,15 +221,16 @@ def test_rerun_pending_tasks__with_2__is_not_so_old_yet(
 # When: 2 TaskManager's, all tasks is old
 # Then: remove all tasks
 @pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
+@pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
 def test_rerun_pending_tasks__with_2__all_tasks_is_old(
-    database, arrange, set_datetime, delta, capsys, patch, get_json_obj
+    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status
 ):
     patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
 
     utc_now = timezone.now()
     set_datetime(utc_now)
 
-    model = arrange(2, {"last_run": utc_now - delta})
+    model = arrange(2, {"last_run": utc_now - delta, "status": status})
 
     command = Command()
     res = command.handle()
