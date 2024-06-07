@@ -133,7 +133,9 @@ class Command(BaseCommand):
     def rerun_pending_tasks(self):
         tolerance = timedelta(minutes=TOLERANCE)
 
-        task_managers = TaskManager.objects.filter(last_run__lt=self.utc_now - tolerance, status="PENDING")
+        task_managers = TaskManager.objects.filter(
+            Q(status="PENDING") | Q(status="SCHEDULED"), last_run__lt=self.utc_now - tolerance
+        )
         if (count := task_managers.count()) == 0:
             msg = self.style.SUCCESS("No TaskManager's available to re-run")
             self.stdout.write(self.style.SUCCESS(msg))

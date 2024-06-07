@@ -114,9 +114,13 @@ def mark_task_as_pending(task_manager_id, *, attempts=0, force=False, last_run=N
         logger.warning(f"TaskManager {task_manager_id} is already running")
         return
 
+    tolerance = TOLERANCE
+    if x.status == "SCHEDULED":
+        tolerance *= 3
+
     if (
         force is False
-        and not x.last_run < timezone.now() - timedelta(minutes=TOLERANCE)
+        and not x.last_run < timezone.now() - timedelta(minutes=tolerance)
         and not x.killed
         and attempts < 10
     ):
