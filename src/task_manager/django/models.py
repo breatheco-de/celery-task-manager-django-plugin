@@ -44,6 +44,7 @@ class TaskManager(models.Model):
     task_id = models.CharField(max_length=36, default="", blank=True)
 
     killed = models.BooleanField(default=False)
+    fixed = models.BooleanField(default=False, help_text="True if any inconsistence was fixed")
     last_run = models.DateTimeField()
 
     started_at = models.DateTimeField(default=None, blank=True, null=True)

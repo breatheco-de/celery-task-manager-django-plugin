@@ -124,6 +124,7 @@ def db_item(data={}):
         "exception_module": None,
         "exception_name": None,
         "status": "DONE",
+        "fixed": False,
         "status_message": None,
         "task_module": "breathecode.commons.tasks",
         "task_name": "",

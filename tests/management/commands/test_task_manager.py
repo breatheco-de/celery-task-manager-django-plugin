@@ -45,7 +45,13 @@ def arrange(database):
 
 @pytest.fixture
 def patch(monkeypatch):
-    def handler(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False, run_scheduled_tasks=False):
+    def handler(
+        clean_older_tasks=False,
+        rerun_pending_tasks=False,
+        daily_report=False,
+        run_scheduled_tasks=False,
+        deal_with_pagination_issues=False,
+    ):
         if clean_older_tasks is False:
             monkeypatch.setattr("task_manager.management.commands.task_manager.Command.clean_older_tasks", MagicMock())
 
@@ -60,6 +66,11 @@ def patch(monkeypatch):
         if run_scheduled_tasks is False:
             monkeypatch.setattr(
                 "task_manager.management.commands.task_manager.Command.run_scheduled_tasks", MagicMock()
+            )
+
+        if deal_with_pagination_issues is False:
+            monkeypatch.setattr(
+                "task_manager.management.commands.task_manager.Command.deal_with_pagination_issues", MagicMock()
             )
 
     return handler
@@ -393,4 +404,75 @@ def testrun_scheduled_tasks__all_them_pending_in_the_future(
 
     captured = capsys.readouterr()
     assert captured.out == "Successfully scheduled 0 Tasks\n"
+    assert captured.err == ""
+
+
+# When: 0 TaskManager's
+# Then: nothing happens
+def test_deal_with_pagination_issues__with_0(database, patch, capsys):
+    patch(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False, deal_with_pagination_issues=True)
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == []
+
+    captured = capsys.readouterr()
+    assert captured.out == "No TaskManager's with pagination issues\n"
+    assert captured.err == ""
+
+
+# When: 2 TaskManager's, one of them is not old enough
+# Then: nothing happens
+@pytest.mark.parametrize("page", [2, 3])
+def test_deal_with_pagination_issues__with_2(database, arrange, set_datetime, patch, get_json_obj, capsys, page):
+    patch(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False, deal_with_pagination_issues=True)
+
+    utc_now = timezone.now()
+    set_datetime(utc_now)
+
+    model = arrange(2, {"current_page": page, "total_pages": 3, "status": "PENDING"})
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+
+    captured = capsys.readouterr()
+    assert captured.out == "No TaskManager's with pagination issues\n"
+    assert captured.err == ""
+
+
+# When: 2 TaskManager's, one of them is not old enough
+# Then: pagination are fixed and it's marked as DONE
+@pytest.mark.parametrize("page", [4, 5])
+def test_deal_with_pagination_issues__with_2__pagination_overflowed(
+    database, arrange, set_datetime, patch, get_json_obj, capsys, page
+):
+    patch(clean_older_tasks=False, rerun_pending_tasks=False, daily_report=False, deal_with_pagination_issues=True)
+
+    utc_now = timezone.now()
+    set_datetime(utc_now)
+    total_pages = 3
+
+    model = arrange(2, {"current_page": page, "total_pages": total_pages, "status": "PENDING"})
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == [
+        {
+            **get_json_obj(x),
+            "fixed": True,
+            "current_page": total_pages,
+            "status": "DONE",
+        }
+        for x in model.task_manager
+    ]
+
+    captured = capsys.readouterr()
+    assert captured.out == "Fixed 2 TaskManager's with pagination issues\n"
     assert captured.err == ""

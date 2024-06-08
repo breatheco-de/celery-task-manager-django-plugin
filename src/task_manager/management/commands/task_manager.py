@@ -6,7 +6,7 @@ from celery import Task
 
 # from breathecode.notify.actions import send_email_message
 from django.core.management.base import BaseCommand
-from django.db.models import Q, QuerySet
+from django.db.models import F, Q, QuerySet
 from django.utils import timezone
 
 from task_manager.django import tasks
@@ -58,6 +58,7 @@ class Command(BaseCommand):
         self.utc_now = timezone.now()
 
         self.clean_older_tasks()
+        self.deal_with_pagination_issues()
         self.rerun_pending_tasks()
         # self.daily_report()
         self.run_scheduled_tasks()
@@ -86,12 +87,31 @@ class Command(BaseCommand):
 
         count_errors = errors.count()
         count_alright = alright.count()
-        print(errors)
-        print(alright)
         self.delete_items(errors)
         self.delete_items(alright)
 
         self.stdout.write(self.style.SUCCESS(f"Successfully deleted {str(count_errors + count_alright)} TaskManager's"))
+
+    def deal_with_pagination_issues(self):
+        task_managers = TaskManager.objects.filter(current_page__gt=F("total_pages"), status="PENDING")
+
+        if (count := task_managers.count()) == 0:
+            msg = self.style.SUCCESS("No TaskManager's with pagination issues")
+            self.stdout.write(self.style.SUCCESS(msg))
+            return
+
+        limit = LIMITS["small"]
+
+        while True:
+            pks = task_managers.values_list("pk", flat=True)[:limit]
+
+            if len(pks) == 0:
+                break
+
+            TaskManager.objects.filter(pk__in=pks).update(current_page=F("total_pages"), status="DONE", fixed=True)
+
+        msg = self.style.SUCCESS(f"Fixed {count} TaskManager's with pagination issues")
+        self.stdout.write(self.style.SUCCESS(msg))
 
     def run_scheduled_tasks(self):
         modules = {}
