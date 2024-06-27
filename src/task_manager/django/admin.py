@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from . import tasks
-from .models import ScheduledTask, TaskManager, TaskWatcher
+from .models import ScheduledTask, SignalError, TaskManager, TaskWatcher
 
 
 def cancel(modeladmin, request, queryset):
@@ -71,3 +71,10 @@ class ScheduledTaskAdmin(admin.ModelAdmin):
     list_display = ["task_module", "task_name", "status", "eta", "duration"]
     search_fields = ["task_module", "task_name"]
     list_filter = ["status", "task_module"]
+
+
+@admin.register(SignalError)
+class SignalErrorAdmin(admin.ModelAdmin):
+    list_display = ["signal_module", "signal_name", "exception_module", "exception_name", "last_run", "attempts"]
+    search_fields = ["signal_module", "signal_name", "exception_module", "exception_name"]
+    list_filter = ["signal_module", "exception_module"]

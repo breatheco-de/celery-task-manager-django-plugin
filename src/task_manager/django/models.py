@@ -110,3 +110,36 @@ class ScheduledTask(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class SignalError(models.Model):
+    signal_module = models.CharField(max_length=200)
+    signal_name = models.CharField(max_length=200)
+
+    exception_module = models.CharField(max_length=200)
+    exception_name = models.CharField(max_length=200)
+
+    arguments = models.JSONField(default=dict, blank=True, null=False)
+    message = models.CharField(max_length=255)
+    last_run = models.DateTimeField()
+    attempts = models.IntegerField(default=1)
+
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    def __str__(self):
+        return (
+            self.signal_module
+            + " "
+            + self.signal_name
+            + " "
+            + self.exception_module
+            + " "
+            + self.exception_name
+            + " "
+            + str(self.arguments)
+        )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)

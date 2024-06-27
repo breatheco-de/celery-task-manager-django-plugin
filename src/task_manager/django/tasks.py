@@ -1,11 +1,15 @@
 import importlib
 import logging
 from datetime import timedelta
+from typing import Any
 
 from celery import shared_task
 from django.utils import timezone
 
+from task_manager.core.exceptions import RetryTask
 from task_manager.core.settings import get_setting
+from task_manager.django.decorators import task
+from task_manager.django.dispatch import SIGNALS
 
 from .models import TaskManager
 
@@ -155,4 +159,35 @@ def mark_task_as_pending(task_manager_id, *, attempts=0, force=False, last_run=N
     logger.info(f"TaskManager {task_manager_id} is being marked as PENDING")
 
 
-MODULES = {}
+# do not use our own task decorator
+@task(bind=False, priority=PRIORITY)
+def execute_signal(
+    signal_module: str, signal_name: str, sender_module: str, sender_name: str, pk: Any, extra: dict[str, Any], **_: Any
+):
+    logger.info(f"Running execute_signal for {signal_module} {signal_name}, {sender_module} {sender_name} {pk}")
+
+    module = SIGNALS.get(signal_module, None)
+    if module is None:
+        raise Exception(f"Emisor {signal_module} wasn't loaded")
+
+    signal = module.get(signal_name, None)
+    if signal is None:
+        raise Exception(f"Signal {signal_name} wasn't loaded")
+
+    try:
+        x = importlib.import_module(sender_module)
+
+    except Exception:
+        raise Exception(f"sender_module {sender_module} isn't valid")
+
+    sender = getattr(x, sender_name, None)
+    if sender is None:
+        raise Exception(f"sender_name {sender_name} isn't valid")
+
+    instance = sender.objects.filter(pk=pk).first()
+    if instance is None:
+        raise RetryTask(f"{sender.__name__} with pk={pk} wasn't found")
+
+    signal.send(sender=sender, instance=instance, **extra)
+
+    logger.info("Signal executed successfully")
