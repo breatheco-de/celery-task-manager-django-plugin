@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from typing import Any, Type
 
 from asgiref.sync import sync_to_async
