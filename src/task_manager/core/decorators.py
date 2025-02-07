@@ -1,6 +1,5 @@
 import functools
 import importlib
-import inspect
 import logging
 import traceback
 from datetime import datetime
@@ -13,6 +12,9 @@ from task_manager.core.actions import get_fn_desc, parse_payload
 
 from .exceptions import AbortTask, ProgrammingError, RetryTask
 from .settings import settings
+
+# from task_manager.core.constants import DuplicationPolicy
+
 
 __all__ = ["Task"]
 
@@ -31,6 +33,7 @@ except ImportError:
 class TaskManager:
     current_page: Optional[int]
     total_pages: Optional[int]
+    priority: Optional[int]
     attempts: int
 
     task_module: str
@@ -56,6 +59,13 @@ class TaskManager:
 
 
 class Task(object):
+    priority: int
+    bind: bool
+    fallback: Optional[Callable]
+    reverse: Optional[Callable]
+    transaction_id: Optional[Any]
+    is_transaction: bool
+    # duplication_policy: Optional[str]
 
     def __init__(self, *args, **kwargs):
         self.transaction_id = None
@@ -64,6 +74,12 @@ class Task(object):
         self.reverse = kwargs.pop("reverse", None)
         self.bind = kwargs.get("bind", False)
         self.priority = kwargs.pop("priority", settings["DEFAULT"])
+        # self.duplication_policy = kwargs.pop("duplication_policy", settings["DUPLICATION_POLICY"])
+        # if self.duplication_policy is not None and self.duplication_policy not in [x.value for x in DuplicationPolicy]:
+        #     raise ValueError(
+        #         f"Invalid duplication policy: {self.duplication_policy}, must be one of: {', '.join([x.value for x in DuplicationPolicy])}"
+        #     )
+
         kwargs["priority"] = settings["SCHEDULER"]
 
         if self.fallback and not callable(self.fallback):
@@ -170,6 +186,7 @@ class Task(object):
                     current_page=page,
                     total_pages=total_pages,
                     last_run=last_run,
+                    priority=self.priority,
                 )
 
                 kwargs["task_manager_id"] = x.id

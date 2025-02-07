@@ -125,6 +125,7 @@ def db_item(data={}):
         "exception_name": None,
         "status": "DONE",
         "fixed": False,
+        "priority": None,
         "status_message": None,
         "task_module": "breathecode.commons.tasks",
         "task_name": "",
@@ -173,6 +174,7 @@ def test_no_task_manager(database, get_json_obj, setup, utc_now, monkeypatch):
                 "task_name": task_name,
                 "current_page": 0,
                 "total_pages": 1,
+                "priority": 5,
             }
         ),
     ]

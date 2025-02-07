@@ -102,7 +102,7 @@ def test_found(database, arrange, get_json_obj):
 
     assert Logger.info.call_args_list == [
         call("Running mark_task_as_paused for 1"),
-        call("TaskManager 1 is being marked as PAUSED"),
+        call("TaskManager 1 marked as PAUSED"),
     ]
 
     assert Logger.warning.call_args_list == []

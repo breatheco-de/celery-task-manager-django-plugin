@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import MagicMock, call
 
 import pytest
+from celery.result import AsyncResult
 from django.utils import timezone
 
 from task_manager.django import tasks
@@ -26,9 +27,10 @@ run_scheduled_tasks = {
 
 
 @pytest.fixture(autouse=True)
-def setup(db, monkeypatch):
+def setup(db, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("task_manager.django.tasks.mark_task_as_cancelled.delay", MagicMock())
     monkeypatch.setattr("task_manager.django.tasks.mark_task_as_pending.delay", MagicMock())
+    monkeypatch.setattr(AsyncResult, "revoke", MagicMock())
 
     yield
 
@@ -41,6 +43,14 @@ def arrange(database):
         return model
 
     yield _arrange
+
+
+@pytest.fixture(autouse=True)
+def set_status(monkeypatch: pytest.MonkeyPatch):
+    def set_status(status):
+        monkeypatch.setattr(AsyncResult, "status", status)
+
+    yield set_status
 
 
 @pytest.fixture
@@ -86,6 +96,7 @@ def test_clean_older_tasks__with_0(database, patch):
 
     assert res is None
     assert database.list_of("task_manager.TaskManager") == []
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 TaskManager's, one of them is not old enough
@@ -103,6 +114,7 @@ def test_clean_older_tasks__with_2(database, arrange, set_datetime, patch, get_j
 
     assert res is None
     assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 TaskManager's, one of them is not old enough yet
@@ -122,6 +134,7 @@ def test_clean_older_tasks__with_2__is_not_so_old_yet(database, arrange, set_dat
 
     assert res is None
     assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 TaskManager's, all tasks is old
@@ -141,6 +154,7 @@ def test_clean_older_tasks__with_2__all_tasks_is_old(database, arrange, set_date
 
     assert res is None
     assert database.list_of("task_manager.TaskManager") == []
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 TaskManager's, all tasks is old
@@ -163,6 +177,7 @@ def test_clean_older_tasks__with_2__all_tasks_is_old__but_these_statuses_cannot_
 
     assert res is None
     assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 0 TaskManager's
@@ -180,6 +195,7 @@ def test_rerun_pending_tasks__with_0(database, capsys, patch, get_json_obj):
     captured = capsys.readouterr()
     assert captured.out == "No TaskManager's available to re-run\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 TaskManager's, one of them is not old enough
@@ -202,6 +218,7 @@ def test_rerun_pending_tasks__with_2(database, arrange, set_datetime, capsys, pa
     captured = capsys.readouterr()
     assert captured.out == "No TaskManager's available to re-run\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 TaskManager's, one of them is not old enough yet
@@ -227,6 +244,7 @@ def test_rerun_pending_tasks__with_2__is_not_so_old_yet(
     captured = capsys.readouterr()
     assert captured.out == "No TaskManager's available to re-run\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 TaskManager's, all tasks is old
@@ -234,8 +252,10 @@ def test_rerun_pending_tasks__with_2__is_not_so_old_yet(
 @pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
 @pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
 def test_rerun_pending_tasks__with_2__all_tasks_is_old(
-    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status
+    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status, set_status
 ):
+    set_status("PENDING")
+
     patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
 
     utc_now = timezone.now()
@@ -253,6 +273,65 @@ def test_rerun_pending_tasks__with_2__all_tasks_is_old(
     captured = capsys.readouterr()
     assert captured.out == "Rerunning TaskManager's 1, 2\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == [call(terminate=True), call(terminate=True)]
+
+
+# When: 2 TaskManager's, all tasks is old
+# Then: remove all tasks
+@pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
+@pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
+def test_rerun_pending_tasks__with_2__all_tasks_is_old__sent_status(
+    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status, set_status
+):
+    set_status("SENT")
+
+    patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
+
+    utc_now = timezone.now()
+    set_datetime(utc_now)
+
+    model = arrange(2, {"last_run": utc_now - delta, "status": status})
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+    assert tasks.mark_task_as_pending.delay.call_args_list == []
+
+    captured = capsys.readouterr()
+    assert captured.out == "Rerunning TaskManager's 1, 2\n"
+    assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
+
+
+# When: 2 TaskManager's, all tasks is old
+# Then: remove all tasks
+@pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
+@pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
+def test_rerun_pending_tasks__with_2__all_tasks_is_old__pending_status(
+    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status, set_status
+):
+    set_status("PENDING")
+
+    patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
+
+    utc_now = timezone.now()
+    set_datetime(utc_now)
+
+    model = arrange(2, {"last_run": utc_now - delta, "status": status})
+
+    command = Command()
+    res = command.handle()
+
+    assert res is None
+    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+    assert tasks.mark_task_as_pending.delay.call_args_list == [call(1, force=True), call(2, force=True)]
+
+    captured = capsys.readouterr()
+    assert captured.out == "Rerunning TaskManager's 1, 2\n"
+    assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == [call(terminate=True), call(terminate=True)]
 
 
 # When: 0 ScheduledTask's
@@ -275,6 +354,7 @@ def testrun_scheduled_tasks__has_not_any_scheduled(database, arrange, set_dateti
     captured = capsys.readouterr()
     assert captured.out == "Successfully scheduled 0 Tasks\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 ScheduledTask's, all them in the past
@@ -318,6 +398,7 @@ def testrun_scheduled_tasks__all_them_pending_in_the_past(
     captured = capsys.readouterr()
     assert captured.out == "Successfully scheduled 2 Tasks\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 ScheduledTask's, all them in the past
@@ -362,6 +443,7 @@ def testrun_scheduled_tasks__all_them_not_pending_in_the_past(
     captured = capsys.readouterr()
     assert captured.out == "Successfully scheduled 0 Tasks\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 ScheduledTask's, all them in the past
@@ -405,6 +487,7 @@ def testrun_scheduled_tasks__all_them_pending_in_the_future(
     captured = capsys.readouterr()
     assert captured.out == "Successfully scheduled 0 Tasks\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 0 TaskManager's
@@ -421,6 +504,7 @@ def test_deal_with_pagination_issues__with_0(database, patch, capsys):
     captured = capsys.readouterr()
     assert captured.out == "No TaskManager's with pagination issues\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 TaskManager's, one of them is not old enough
@@ -443,6 +527,7 @@ def test_deal_with_pagination_issues__with_2(database, arrange, set_datetime, pa
     captured = capsys.readouterr()
     assert captured.out == "No TaskManager's with pagination issues\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: 2 TaskManager's, one of them is not old enough
@@ -476,3 +561,4 @@ def test_deal_with_pagination_issues__with_2__pagination_overflowed(
     captured = capsys.readouterr()
     assert captured.out == "Fixed 2 TaskManager's with pagination issues\n"
     assert captured.err == ""
+    assert AsyncResult.revoke.call_args_list == []

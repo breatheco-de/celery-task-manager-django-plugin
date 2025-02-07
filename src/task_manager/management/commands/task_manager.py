@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from celery import Task
+from celery.result import AsyncResult
 
 # from breathecode.notify.actions import send_email_message
 from django.core.management.base import BaseCommand
@@ -30,6 +31,7 @@ STATUSES = [
 ]
 
 LIMITS = {
+    "extra_small": 20,
     "small": 100,
     "medium": 1000,
 }
@@ -177,6 +179,11 @@ class Command(BaseCommand):
             ids = task_managers[a:b].values_list("id", flat=True)
 
             for id in ids:
+                pending_task = AsyncResult(id)
+                if pending_task.status == "SENT":
+                    continue
+
+                pending_task.revoke(terminate=True)
                 tasks.mark_task_as_pending.delay(id, force=True)
 
             if ids:

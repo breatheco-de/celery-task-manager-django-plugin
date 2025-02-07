@@ -1,10 +1,11 @@
+# https://docs.celeryq.dev/en/stable/reference/celery.result.html#celery.result.AsyncResult.status
+
 import importlib
 import logging
-from datetime import timedelta
 from typing import Any
 
 from celery import shared_task
-from django.utils import timezone
+from celery.result import AsyncResult
 
 from task_manager.core.exceptions import RetryTask
 from task_manager.core.settings import get_setting
@@ -15,7 +16,6 @@ from .models import TaskManager
 
 logger = logging.getLogger(__name__)
 
-TOLERANCE = 10
 
 PRIORITY = get_setting("TASK_MANAGER")
 
@@ -34,15 +34,24 @@ def mark_task_as_cancelled(task_manager_id):
         logger.warning(f"TaskManager {task_manager_id} was already DONE")
         return
 
+    pending_task = AsyncResult(x.task_id)
+    if pending_task.status == "STARTED":
+        logger.warning(f"TaskManager {task_manager_id} is being executed, skipping")
+        return
+
     x.status = "CANCELLED"
+    x.killed = pending_task.status == "SENT"
+
+    pending_task.revoke(terminate=True)
+
     x.save()
 
-    logger.info(f"TaskManager {task_manager_id} is being marked as CANCELLED")
+    logger.info(f"TaskManager {task_manager_id} marked as CANCELLED")
 
 
 # do not use our own task decorator
 @shared_task(bind=False, priority=PRIORITY)
-def mark_task_as_reversed(task_manager_id, *, attempts=0, force=False):
+def mark_task_as_reversed(task_manager_id, *, force=False):
     logger.info(f"Running mark_task_as_reversed for {task_manager_id}")
 
     x = TaskManager.objects.filter(id=task_manager_id).first()
@@ -54,22 +63,17 @@ def mark_task_as_reversed(task_manager_id, *, attempts=0, force=False):
         logger.warning(f"TaskManager {task_manager_id} does not have a reverse function")
         return
 
-    if not force and (
-        x.status != "DONE"
-        and not x.last_run < timezone.now() - timedelta(minutes=TOLERANCE)
-        and not x.killed
-        and attempts < 10
-    ):
-        logger.warning(f"TaskManager {task_manager_id} was not killed, scheduling to run it again")
-
-        x.status = "CANCELLED"
-        x.save()
-
-        mark_task_as_reversed.apply_async(
-            args=(task_manager_id,), kwargs={"attempts": attempts + 1}, eta=timezone.now() + timedelta(seconds=30)
+    if not force and x.status != "DONE":
+        logger.warning(
+            f"TaskManager {task_manager_id} is '{x.status}', skipping, you could use force=True to reverse it"
         )
         return
 
+    if force:
+        pending_task = AsyncResult(x.task_id)
+        pending_task.revoke(terminate=True)
+
+    x.killed = False
     x.status = "REVERSED"
     x.save()
 
@@ -77,7 +81,7 @@ def mark_task_as_reversed(task_manager_id, *, attempts=0, force=False):
     function = getattr(module, x.reverse_name)
     function(*x.arguments["args"], **x.arguments["kwargs"])
 
-    logger.info(f"TaskManager {task_manager_id} is being marked as REVERSED")
+    logger.info(f"TaskManager {task_manager_id} marked as REVERSED")
 
 
 # do not use our own task decorator
@@ -95,14 +99,15 @@ def mark_task_as_paused(task_manager_id):
         return
 
     x.status = "PAUSED"
+
     x.save()
 
-    logger.info(f"TaskManager {task_manager_id} is being marked as PAUSED")
+    logger.info(f"TaskManager {task_manager_id} marked as PAUSED")
 
 
 # do not use our own task decorator
 @shared_task(bind=False, priority=PRIORITY)
-def mark_task_as_pending(task_manager_id, *, attempts=0, force=False, last_run=None):
+def mark_task_as_pending(task_manager_id, *, force=False):
     logger.info(f"Running mark_task_as_pending for {task_manager_id}")
 
     x = TaskManager.objects.filter(id=task_manager_id).first()
@@ -111,37 +116,23 @@ def mark_task_as_pending(task_manager_id, *, attempts=0, force=False, last_run=N
         return
 
     if x.status in ["DONE", "CANCELLED", "REVERSED"]:
-        logger.warning(f"TaskManager {task_manager_id} was already DONE")
+        logger.warning(f"TaskManager {task_manager_id} is already DONE")
         return
 
-    if last_run and last_run != x.last_run:
-        logger.warning(f"TaskManager {task_manager_id} is already running")
+    pending_task = AsyncResult(x.task_id)
+    if force is False and pending_task.status == "SENT":
+        logger.warning(f"TaskManager {task_manager_id} scheduled, skipping")
         return
 
-    tolerance = TOLERANCE
-    if x.status == "SCHEDULED":
-        tolerance *= 3
-
-    if (
-        force is False
-        and not x.last_run < timezone.now() - timedelta(minutes=tolerance)
-        and not x.killed
-        and attempts < 10
-    ):
-        logger.warning(f"TaskManager {task_manager_id} was not killed, scheduling to run it again")
-
-        mark_task_as_pending.apply_async(
-            args=(task_manager_id,),
-            kwargs={
-                "attempts": attempts + 1,
-                "last_run": last_run or x.last_run,
-            },
-            eta=timezone.now() + timedelta(seconds=30),
-        )
+    if pending_task.status == "STARTED":
+        logger.warning(f"TaskManager {task_manager_id} is being executed, skipping")
         return
 
     x.status = "PENDING"
-    x.killed = False
+    x.killed = pending_task.status == "SENT"
+
+    pending_task.revoke(terminate=True)
+
     x.save()
 
     module = importlib.import_module(x.task_module)
@@ -156,7 +147,7 @@ def mark_task_as_pending(task_manager_id, *, attempts=0, force=False, last_run=N
         },
     )
 
-    logger.info(f"TaskManager {task_manager_id} is being marked as PENDING")
+    logger.info(f"TaskManager {task_manager_id} marked as PENDING")
 
 
 # do not use our own task decorator

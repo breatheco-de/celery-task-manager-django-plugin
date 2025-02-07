@@ -1,23 +1,18 @@
 import importlib
 import os
 import random
-from datetime import timedelta
 from logging import Logger
 from unittest.mock import MagicMock, call
 
 import pytest
-from django.utils import timezone
+from celery.result import AsyncResult
 
-from task_manager.django import tasks
 from task_manager.django.tasks import mark_task_as_reversed
 
 # this fix a problem caused by the geniuses at pytest-xdist
 random.seed(os.getenv("RANDOM_SEED"))
 
 # minutes
-TOLERANCE = random.randint(3, 10)
-TOLERATED_DELTA = [timezone.timedelta(minutes=x) for x in range(0, TOLERANCE)]
-NO_TOLERATED_DELTA = [timezone.timedelta(minutes=x) for x in range(TOLERANCE + 1, TOLERANCE + 5)]
 
 params = [
     ("breathecode.admissions.tasks", "async_test_syllabus"),
@@ -35,15 +30,22 @@ param_names = "task_module,task_name"
 
 
 @pytest.fixture(autouse=True)
-def setup(db, monkeypatch):
-    monkeypatch.setattr("task_manager.django.tasks.mark_task_as_reversed.apply_async", MagicMock())
+def setup(db, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("logging.Logger.info", MagicMock())
     monkeypatch.setattr("logging.Logger.warning", MagicMock())
     monkeypatch.setattr("logging.Logger.error", MagicMock())
     monkeypatch.setattr("importlib.import_module", MagicMock())
-    monkeypatch.setattr("task_manager.django.tasks.TOLERANCE", TOLERANCE)
+    monkeypatch.setattr(AsyncResult, "revoke", MagicMock())
 
     yield
+
+
+@pytest.fixture(autouse=True)
+def set_status(monkeypatch: pytest.MonkeyPatch):
+    def set_status(status):
+        monkeypatch.setattr(AsyncResult, "status", status)
+
+    yield set_status
 
 
 def get_args(fake):
@@ -113,9 +115,8 @@ def test_not_found(database):
 
     assert database.list_of("task_manager.TaskManager") == []
 
-    assert tasks.mark_task_as_reversed.apply_async.call_args_list == []
-
     assert importlib.import_module.call_args_list == []
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: TaskManager without reverse function
@@ -143,14 +144,13 @@ def test_no_reverse_function(database, arrange, task_module, task_name, get_json
 
     assert database.list_of("task_manager.TaskManager") == [get_json_obj(model.task_manager)]
 
-    assert tasks.mark_task_as_reversed.apply_async.call_args_list == []
-
     assert importlib.import_module.call_args_list == []
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: TaskManager with reverse function
 # Then: the task is reverse
-@pytest.mark.parametrize(param_names, sorted(params))
+@pytest.mark.parametrize(param_names, sorted(random.choices(params, k=1)))
 def test_reversed(database, arrange, task_module, task_name, get_json_obj):
 
     model = arrange(
@@ -159,6 +159,7 @@ def test_reversed(database, arrange, task_module, task_name, get_json_obj):
             "task_name": task_name,
             "reverse_module": task_module,
             "reverse_name": "reverse",
+            "status": "DONE",
         }
     )
 
@@ -168,7 +169,7 @@ def test_reversed(database, arrange, task_module, task_name, get_json_obj):
 
     assert Logger.info.call_args_list == [
         call("Running mark_task_as_reversed for 1"),
-        call("TaskManager 1 is being marked as REVERSED"),
+        call("TaskManager 1 marked as REVERSED"),
     ]
 
     assert Logger.warning.call_args_list == []
@@ -181,19 +182,18 @@ def test_reversed(database, arrange, task_module, task_name, get_json_obj):
         },
     ]
 
-    assert tasks.mark_task_as_reversed.apply_async.call_args_list == []
-
     assert importlib.import_module.call_args_list == [call(task_module)]
     assert importlib.import_module.return_value.reverse.call_args_list == [
         call(*model.task_manager.arguments["args"], **model.task_manager.arguments["kwargs"]),
     ]
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: TaskManager last_run is less than the tolerance
 # Then: mark_task_as_pending is rescheduled
-@pytest.mark.parametrize("delta", sorted(TOLERATED_DELTA))
+@pytest.mark.parametrize("status", ["PENDING", "CANCELLED", "PAUSED", "ABORTED", "ERROR", "SCHEDULED"])
 @pytest.mark.parametrize(param_names, sorted(random.choices(params, k=1)))
-def test_task_last_run_less_than_the_tolerance(database, arrange, task_module, task_name, delta, utc_now, get_json_obj):
+def test_task_is_not_done(database, arrange, task_module, task_name, get_json_obj, status):
 
     model = arrange(
         {
@@ -201,7 +201,7 @@ def test_task_last_run_less_than_the_tolerance(database, arrange, task_module, t
             "task_name": task_name,
             "reverse_module": task_module,
             "reverse_name": "reverse",
-            "last_run": timezone.now() - delta,
+            "status": status,
         }
     )
 
@@ -213,30 +213,27 @@ def test_task_last_run_less_than_the_tolerance(database, arrange, task_module, t
         call("Running mark_task_as_reversed for 1"),
     ]
 
-    assert Logger.warning.call_args_list == [call("TaskManager 1 was not killed, scheduling to run it again")]
+    assert Logger.warning.call_args_list == [
+        call(f"TaskManager 1 is '{status}', skipping, you could use force=True to reverse it"),
+    ]
     assert Logger.error.call_args_list == []
 
     assert database.list_of("task_manager.TaskManager") == [
         {
             **get_json_obj(model.task_manager),
-            "status": "CANCELLED",
+            "status": status,
         },
     ]
 
-    assert tasks.mark_task_as_reversed.apply_async.call_args_list == [
-        call(args=(1,), kwargs={"attempts": 1}, eta=utc_now + timedelta(seconds=30)),
-    ]
-
     assert importlib.import_module.call_args_list == []
+    assert AsyncResult.revoke.call_args_list == []
 
 
 # When: TaskManager last_run is less than the tolerance, force is True
 # Then: it's rescheduled, the tolerance is ignored
-@pytest.mark.parametrize("delta", sorted(TOLERATED_DELTA))
+@pytest.mark.parametrize("status", ["PENDING", "CANCELLED", "PAUSED", "ABORTED", "ERROR", "SCHEDULED"])
 @pytest.mark.parametrize(param_names, sorted(random.choices(params, k=1)))
-def test_task_last_run_less_than_the_tolerance__force_true(
-    database, arrange, task_module, task_name, delta, get_json_obj
-):
+def test_force_true(database, arrange, task_module, task_name, get_json_obj, status):
 
     model = arrange(
         {
@@ -244,7 +241,7 @@ def test_task_last_run_less_than_the_tolerance__force_true(
             "task_name": task_name,
             "reverse_module": task_module,
             "reverse_name": "reverse",
-            "last_run": timezone.now() - delta,
+            "status": status,
         }
     )
 
@@ -254,7 +251,7 @@ def test_task_last_run_less_than_the_tolerance__force_true(
 
     assert Logger.info.call_args_list == [
         call("Running mark_task_as_reversed for 1"),
-        call("TaskManager 1 is being marked as REVERSED"),
+        call("TaskManager 1 marked as REVERSED"),
     ]
 
     assert Logger.warning.call_args_list == []
@@ -266,90 +263,4 @@ def test_task_last_run_less_than_the_tolerance__force_true(
             "status": "REVERSED",
         },
     ]
-
-    assert tasks.mark_task_as_reversed.apply_async.call_args_list == []
-
-
-# When: TaskManager last_run is less than the tolerance, attempts is greater than 10
-# Then: it's rescheduled because the task was not ended and it's not running
-@pytest.mark.parametrize("attempts", sorted([x for x in range(11, 16)]))
-@pytest.mark.parametrize("delta", sorted(TOLERATED_DELTA))
-@pytest.mark.parametrize(param_names, sorted(random.choices(params, k=1)))
-def test_task_last_run_less_than_the_tolerance__attempts_gt_10(
-    database, arrange, task_module, task_name, delta, attempts, get_json_obj
-):
-
-    model = arrange(
-        {
-            "task_module": task_module,
-            "task_name": task_name,
-            "reverse_module": task_module,
-            "reverse_name": "reverse",
-            "last_run": timezone.now() - delta,
-        }
-    )
-
-    res = mark_task_as_reversed(1, attempts=attempts)
-
-    assert res is None
-
-    assert Logger.info.call_args_list == [
-        call("Running mark_task_as_reversed for 1"),
-        call("TaskManager 1 is being marked as REVERSED"),
-    ]
-
-    assert Logger.warning.call_args_list == []
-    assert Logger.error.call_args_list == []
-
-    assert database.list_of("task_manager.TaskManager") == [
-        {
-            **get_json_obj(model.task_manager),
-            "status": "REVERSED",
-        },
-    ]
-
-    assert tasks.mark_task_as_reversed.apply_async.call_args_list == []
-
-
-# When: TaskManager last_run is greater than the tolerance
-# Then: mark_task_as_pending is rescheduled
-# @pytest.mark.randomized
-@pytest.mark.parametrize("delta", sorted(NO_TOLERATED_DELTA))
-@pytest.mark.parametrize(param_names, sorted(random.choices(params, k=1)))
-def test_task_last_run_greater_than_the_tolerance(database, arrange, task_module, task_name, delta, get_json_obj):
-
-    model = arrange(
-        {
-            "task_module": task_module,
-            "task_name": task_name,
-            "reverse_module": task_module,
-            "reverse_name": "reverse",
-            "last_run": timezone.now() - delta,
-        }
-    )
-
-    res = mark_task_as_reversed(1)
-
-    assert res is None
-
-    assert Logger.info.call_args_list == [
-        call("Running mark_task_as_reversed for 1"),
-        call("TaskManager 1 is being marked as REVERSED"),
-    ]
-
-    assert Logger.warning.call_args_list == []
-    assert Logger.error.call_args_list == []
-
-    assert database.list_of("task_manager.TaskManager") == [
-        {
-            **get_json_obj(model.task_manager),
-            "status": "REVERSED",
-        },
-    ]
-
-    assert tasks.mark_task_as_reversed.apply_async.call_args_list == []
-
-    assert importlib.import_module.call_args_list == [call(task_module)]
-    assert importlib.import_module.return_value.reverse.call_args_list == [
-        call(*model.task_manager.arguments["args"], **model.task_manager.arguments["kwargs"]),
-    ]
+    assert AsyncResult.revoke.call_args_list == [call(terminate=True)]

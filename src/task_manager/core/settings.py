@@ -1,6 +1,8 @@
 import os
 from datetime import timedelta
 
+# importing signals to register them
+from . import signals  # noqa
 from .exceptions import ProgrammingError
 
 __init__ = ["set_settings", "get_setting"]

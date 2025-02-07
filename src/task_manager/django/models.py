@@ -42,6 +42,7 @@ class TaskManager(models.Model):
     status = models.CharField(max_length=20, choices=TASK_STATUS, default=PENDING)
     status_message = models.TextField(blank=True, null=True, max_length=255)
     task_id = models.CharField(max_length=36, default="", blank=True)
+    priority = models.IntegerField(default=None, blank=True, null=True)
 
     killed = models.BooleanField(default=False)
     fixed = models.BooleanField(default=False, help_text="True if any inconsistence was fixed")
