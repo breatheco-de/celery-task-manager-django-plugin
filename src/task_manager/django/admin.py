@@ -1,3 +1,5 @@
+import os
+
 from django.contrib import admin
 
 from . import tasks
@@ -29,6 +31,28 @@ def resume(modeladmin, request, queryset):
         tasks.mark_task_as_pending.delay(x.id)
 
 
+SHOW_DURATION = os.getenv("TM_SHOW_DURATION", "0") in [
+    "true",
+    "1",
+    "yes",
+    "y",
+    "on",
+    "enable",
+    "enabled",
+    "True",
+    "TRUE",
+    "Yes",
+    "YES",
+    "Y",
+    "On",
+    "ON",
+    "Enable",
+    "ENABLE",
+    "Enabled",
+    "ENABLED",
+]
+
+
 @admin.register(TaskManager)
 class TaskManagerAdmin(admin.ModelAdmin):
     list_display = [
@@ -37,25 +61,28 @@ class TaskManagerAdmin(admin.ModelAdmin):
         "reverse_module",
         "reverse_name",
         "status",
-        "get_duration",
         "last_run",
         "current_page",
         "total_pages",
         "killed",
     ]
+
     search_fields = ["task_module", "task_name", "reverse_module", "reverse_name"]
     list_filter = ["status", "killed", "task_module"]
     actions = [pause, resume, cancel, reverse, force_reverse]
 
-    @admin.display(description="Duration (ms)")
-    def get_duration(self, obj):
-        if obj.started_at is None:
-            return "No started"
+    if SHOW_DURATION:
+        list_display.append("get_duration")
 
-        duration = obj.updated_at - obj.started_at
-        # Calculating duration in milliseconds
-        duration_ms = duration.total_seconds() * 1000
-        return f"{int(duration_ms)} ms"
+        @admin.display(description="Duration (ms)")
+        def get_duration(self, obj):
+            if obj.started_at is None:
+                return "No started"
+
+            duration = obj.updated_at - obj.started_at
+            # Calculating duration in milliseconds
+            duration_ms = duration.total_seconds() * 1000
+            return f"{int(duration_ms)} ms"
 
 
 @admin.register(TaskWatcher)
