@@ -176,7 +176,7 @@ class Command(BaseCommand):
             page += 1
             b = page * limit
 
-            ids = task_managers[a:b].values_list("id", 'task_id')
+            ids = task_managers[a:b].values_list("id", "task_id")
 
             for id, task_id in ids:
                 pending_task = AsyncResult(task_id)
@@ -187,7 +187,7 @@ class Command(BaseCommand):
                 tasks.mark_task_as_pending.delay(id, force=True)
 
             if ids:
-                msg = self.style.SUCCESS(f"Rerunning TaskManager's {', '.join([str(id) for id in ids])}")
+                msg = self.style.SUCCESS(f"Rerunning TaskManager's {', '.join([str(id) for id, _ in ids])}")
 
             self.stdout.write(self.style.SUCCESS(msg))
 

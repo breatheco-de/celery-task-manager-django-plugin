@@ -31,6 +31,7 @@ def setup(db, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("task_manager.django.tasks.mark_task_as_cancelled.delay", MagicMock())
     monkeypatch.setattr("task_manager.django.tasks.mark_task_as_pending.delay", MagicMock())
     monkeypatch.setattr(AsyncResult, "revoke", MagicMock())
+    monkeypatch.setattr(AsyncResult, "__init__", MagicMock(return_value=None))
 
     yield
 
@@ -40,6 +41,16 @@ def arrange(database):
 
     def _arrange(n1, data1={}, n2=0, data2={}):
         model = database.create(task_manager=(n1, data1), scheduled_task=(n2, data2))
+
+        if n1 > 1:
+            for task_manager in model.task_manager:
+                task_manager.task_id = str(task_manager.id)
+                task_manager.save()
+
+        elif n1 == 1:
+            model.task_manager.task_id = str(model.task_manager.id)
+            model.task_manager.save()
+
         return model
 
     yield _arrange
@@ -239,7 +250,7 @@ def test_rerun_pending_tasks__with_2__is_not_so_old_yet(
 
     assert res is None
     assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
-    # assert tasks.mark_task_as_pending.delay.call_args_list == []
+    assert tasks.mark_task_as_pending.delay.call_args_list == []
 
     captured = capsys.readouterr()
     assert captured.out == "No TaskManager's available to re-run\n"
@@ -274,6 +285,7 @@ def test_rerun_pending_tasks__with_2__all_tasks_is_old(
     assert captured.out == "Rerunning TaskManager's 1, 2\n"
     assert captured.err == ""
     assert AsyncResult.revoke.call_args_list == [call(terminate=True), call(terminate=True)]
+    assert AsyncResult.__init__.call_args_list == [call(str(task_manager.id)) for task_manager in model.task_manager]
 
 
 # When: 2 TaskManager's, all tasks is old
@@ -303,6 +315,7 @@ def test_rerun_pending_tasks__with_2__all_tasks_is_old__sent_status(
     assert captured.out == "Rerunning TaskManager's 1, 2\n"
     assert captured.err == ""
     assert AsyncResult.revoke.call_args_list == []
+    assert AsyncResult.__init__.call_args_list == [call(str(task_manager.id)) for task_manager in model.task_manager]
 
 
 # When: 2 TaskManager's, all tasks is old
@@ -332,6 +345,7 @@ def test_rerun_pending_tasks__with_2__all_tasks_is_old__pending_status(
     assert captured.out == "Rerunning TaskManager's 1, 2\n"
     assert captured.err == ""
     assert AsyncResult.revoke.call_args_list == [call(terminate=True), call(terminate=True)]
+    assert AsyncResult.__init__.call_args_list == [call(str(task_manager.id)) for task_manager in model.task_manager]
 
 
 # When: 0 ScheduledTask's
