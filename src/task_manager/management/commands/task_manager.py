@@ -176,10 +176,10 @@ class Command(BaseCommand):
             page += 1
             b = page * limit
 
-            ids = task_managers[a:b].values_list("id", flat=True)
+            ids = task_managers[a:b].values_list("id", 'task_id')
 
-            for id in ids:
-                pending_task = AsyncResult(id)
+            for id, task_id in ids:
+                pending_task = AsyncResult(task_id)
                 if pending_task.status == "SENT":
                     continue
 
