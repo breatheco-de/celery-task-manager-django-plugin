@@ -1,6 +1,8 @@
 import os
 
 from django.contrib import admin
+from django.core.paginator import Paginator
+from django.utils.functional import cached_property
 
 from . import tasks
 from .models import ScheduledTask, SignalError, TaskManager, TaskWatcher
@@ -53,11 +55,27 @@ SHOW_DURATION = os.getenv("TM_SHOW_DURATION", "0") in [
 ]
 
 
+class AproxPaginator(Paginator):
+    def page(self, number):
+        return super().page(number)
+
+    @cached_property
+    def count(self):
+        """Return the total number of objects, across all pages."""
+        has_first = hasattr(self.object_list, "first") and callable(self.object_list.first)
+        has_last = hasattr(self.object_list, "last") and callable(self.object_list.last)
+        has_only = hasattr(self.object_list, "only") and callable(self.object_list.only)
+        if has_first and has_last and has_only:
+            return self.object_list.only("pk").last().pk - self.object_list.only("pk").first().pk + 1
+        return 999999999
+
+
 @admin.register(TaskManager)
 class TaskManagerAdmin(admin.ModelAdmin):
     list_per_page = 20
     list_max_show_all = 20
     show_full_result_count = False
+    paginator = AproxPaginator
     list_display = [
         "task_module",
         "task_name",
