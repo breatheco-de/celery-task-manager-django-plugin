@@ -55,6 +55,8 @@ SHOW_DURATION = os.getenv("TM_SHOW_DURATION", "0") in [
 
 @admin.register(TaskManager)
 class TaskManagerAdmin(admin.ModelAdmin):
+    list_per_page = 20
+    list_max_show_all = 20
     list_display = [
         "task_module",
         "task_name",

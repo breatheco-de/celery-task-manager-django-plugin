@@ -61,7 +61,7 @@ class Command(BaseCommand):
 
         self.clean_older_tasks()
         self.deal_with_pagination_issues()
-        self.rerun_pending_tasks()
+        # self.rerun_pending_tasks()
         # self.daily_report()
         self.run_scheduled_tasks()
 

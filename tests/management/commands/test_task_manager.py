@@ -191,161 +191,161 @@ def test_clean_older_tasks__with_2__all_tasks_is_old__but_these_statuses_cannot_
     assert AsyncResult.revoke.call_args_list == []
 
 
-# When: 0 TaskManager's
-# Then: nothing happens
-def test_rerun_pending_tasks__with_0(database, capsys, patch, get_json_obj):
-    patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
+# # When: 0 TaskManager's
+# # Then: nothing happens
+# def test_rerun_pending_tasks__with_0(database, capsys, patch, get_json_obj):
+#     patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
 
-    command = Command()
-    res = command.handle()
+#     command = Command()
+#     res = command.handle()
 
-    assert res is None
-    assert database.list_of("task_manager.TaskManager") == []
-    assert tasks.mark_task_as_pending.delay.call_args_list == []
+#     assert res is None
+#     assert database.list_of("task_manager.TaskManager") == []
+#     assert tasks.mark_task_as_pending.delay.call_args_list == []
 
-    captured = capsys.readouterr()
-    assert captured.out == "No TaskManager's available to re-run\n"
-    assert captured.err == ""
-    assert AsyncResult.revoke.call_args_list == []
-
-
-# When: 2 TaskManager's, one of them is not old enough
-# Then: nothing happens
-def test_rerun_pending_tasks__with_2(database, arrange, set_datetime, capsys, patch, get_json_obj):
-    patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
-
-    utc_now = timezone.now()
-    set_datetime(utc_now)
-
-    model = arrange(2, {"last_run": utc_now})
-
-    command = Command()
-    res = command.handle()
-
-    assert res is None
-    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
-    assert tasks.mark_task_as_pending.delay.call_args_list == []
-
-    captured = capsys.readouterr()
-    assert captured.out == "No TaskManager's available to re-run\n"
-    assert captured.err == ""
-    assert AsyncResult.revoke.call_args_list == []
+#     captured = capsys.readouterr()
+#     assert captured.out == "No TaskManager's available to re-run\n"
+#     assert captured.err == ""
+#     assert AsyncResult.revoke.call_args_list == []
 
 
-# When: 2 TaskManager's, one of them is not old enough yet
-# Then: nothing happens
-@pytest.mark.parametrize("delta", rerun_pending_tasks["short_delta_list"])
-def test_rerun_pending_tasks__with_2__is_not_so_old_yet(
-    database, arrange, set_datetime, delta, capsys, patch, get_json_obj
-):
-    patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
+# # When: 2 TaskManager's, one of them is not old enough
+# # Then: nothing happens
+# def test_rerun_pending_tasks__with_2(database, arrange, set_datetime, capsys, patch, get_json_obj):
+#     patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
 
-    utc_now = timezone.now()
-    set_datetime(utc_now)
+#     utc_now = timezone.now()
+#     set_datetime(utc_now)
 
-    model = arrange(2, {"last_run": utc_now - delta})
+#     model = arrange(2, {"last_run": utc_now})
 
-    command = Command()
-    res = command.handle()
+#     command = Command()
+#     res = command.handle()
 
-    assert res is None
-    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
-    assert tasks.mark_task_as_pending.delay.call_args_list == []
+#     assert res is None
+#     assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+#     assert tasks.mark_task_as_pending.delay.call_args_list == []
 
-    captured = capsys.readouterr()
-    assert captured.out == "No TaskManager's available to re-run\n"
-    assert captured.err == ""
-    assert AsyncResult.revoke.call_args_list == []
+#     captured = capsys.readouterr()
+#     assert captured.out == "No TaskManager's available to re-run\n"
+#     assert captured.err == ""
+#     assert AsyncResult.revoke.call_args_list == []
 
 
-# When: 2 TaskManager's, all tasks is old
-# Then: remove all tasks
-@pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
-@pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
-def test_rerun_pending_tasks__with_2__all_tasks_is_old(
-    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status, set_status
-):
-    set_status("PENDING")
+# # When: 2 TaskManager's, one of them is not old enough yet
+# # Then: nothing happens
+# @pytest.mark.parametrize("delta", rerun_pending_tasks["short_delta_list"])
+# def test_rerun_pending_tasks__with_2__is_not_so_old_yet(
+#     database, arrange, set_datetime, delta, capsys, patch, get_json_obj
+# ):
+#     patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
 
-    patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
+#     utc_now = timezone.now()
+#     set_datetime(utc_now)
 
-    utc_now = timezone.now()
-    set_datetime(utc_now)
+#     model = arrange(2, {"last_run": utc_now - delta})
 
-    model = arrange(2, {"last_run": utc_now - delta, "status": status})
+#     command = Command()
+#     res = command.handle()
 
-    command = Command()
-    res = command.handle()
+#     assert res is None
+#     assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+#     assert tasks.mark_task_as_pending.delay.call_args_list == []
 
-    assert res is None
-    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
-    assert tasks.mark_task_as_pending.delay.call_args_list == [call(1, force=True), call(2, force=True)]
-
-    captured = capsys.readouterr()
-    assert captured.out == "Rerunning TaskManager's 1, 2\n"
-    assert captured.err == ""
-    assert AsyncResult.revoke.call_args_list == [call(terminate=True), call(terminate=True)]
-    assert AsyncResult.__init__.call_args_list == [call(str(task_manager.id)) for task_manager in model.task_manager]
+#     captured = capsys.readouterr()
+#     assert captured.out == "No TaskManager's available to re-run\n"
+#     assert captured.err == ""
+#     assert AsyncResult.revoke.call_args_list == []
 
 
-# When: 2 TaskManager's, all tasks is old
-# Then: remove all tasks
-@pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
-@pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
-def test_rerun_pending_tasks__with_2__all_tasks_is_old__sent_status(
-    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status, set_status
-):
-    set_status("SENT")
+# # When: 2 TaskManager's, all tasks is old
+# # Then: remove all tasks
+# @pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
+# @pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
+# def test_rerun_pending_tasks__with_2__all_tasks_is_old(
+#     database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status, set_status
+# ):
+#     set_status("PENDING")
 
-    patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
+#     patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
 
-    utc_now = timezone.now()
-    set_datetime(utc_now)
+#     utc_now = timezone.now()
+#     set_datetime(utc_now)
 
-    model = arrange(2, {"last_run": utc_now - delta, "status": status})
+#     model = arrange(2, {"last_run": utc_now - delta, "status": status})
 
-    command = Command()
-    res = command.handle()
+#     command = Command()
+#     res = command.handle()
 
-    assert res is None
-    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
-    assert tasks.mark_task_as_pending.delay.call_args_list == []
+#     assert res is None
+#     assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+#     assert tasks.mark_task_as_pending.delay.call_args_list == [call(1, force=True), call(2, force=True)]
 
-    captured = capsys.readouterr()
-    assert captured.out == "Rerunning TaskManager's 1, 2\n"
-    assert captured.err == ""
-    assert AsyncResult.revoke.call_args_list == []
-    assert AsyncResult.__init__.call_args_list == [call(str(task_manager.id)) for task_manager in model.task_manager]
+#     captured = capsys.readouterr()
+#     assert captured.out == "Rerunning TaskManager's 1, 2\n"
+#     assert captured.err == ""
+#     assert AsyncResult.revoke.call_args_list == [call(terminate=True), call(terminate=True)]
+#     assert AsyncResult.__init__.call_args_list == [call(str(task_manager.id)) for task_manager in model.task_manager]
 
 
-# When: 2 TaskManager's, all tasks is old
-# Then: remove all tasks
-@pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
-@pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
-def test_rerun_pending_tasks__with_2__all_tasks_is_old__pending_status(
-    database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status, set_status
-):
-    set_status("PENDING")
+# # When: 2 TaskManager's, all tasks is old
+# # Then: remove all tasks
+# @pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
+# @pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
+# def test_rerun_pending_tasks__with_2__all_tasks_is_old__sent_status(
+#     database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status, set_status
+# ):
+#     set_status("SENT")
 
-    patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
+#     patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
 
-    utc_now = timezone.now()
-    set_datetime(utc_now)
+#     utc_now = timezone.now()
+#     set_datetime(utc_now)
 
-    model = arrange(2, {"last_run": utc_now - delta, "status": status})
+#     model = arrange(2, {"last_run": utc_now - delta, "status": status})
 
-    command = Command()
-    res = command.handle()
+#     command = Command()
+#     res = command.handle()
 
-    assert res is None
-    assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
-    assert tasks.mark_task_as_pending.delay.call_args_list == [call(1, force=True), call(2, force=True)]
+#     assert res is None
+#     assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+#     assert tasks.mark_task_as_pending.delay.call_args_list == []
 
-    captured = capsys.readouterr()
-    assert captured.out == "Rerunning TaskManager's 1, 2\n"
-    assert captured.err == ""
-    assert AsyncResult.revoke.call_args_list == [call(terminate=True), call(terminate=True)]
-    assert AsyncResult.__init__.call_args_list == [call(str(task_manager.id)) for task_manager in model.task_manager]
+#     captured = capsys.readouterr()
+#     assert captured.out == "Rerunning TaskManager's 1, 2\n"
+#     assert captured.err == ""
+#     assert AsyncResult.revoke.call_args_list == []
+#     assert AsyncResult.__init__.call_args_list == [call(str(task_manager.id)) for task_manager in model.task_manager]
+
+
+# # When: 2 TaskManager's, all tasks is old
+# # Then: remove all tasks
+# @pytest.mark.parametrize("delta", rerun_pending_tasks["long_delta_list"])
+# @pytest.mark.parametrize("status", ["PENDING", "SCHEDULED"])
+# def test_rerun_pending_tasks__with_2__all_tasks_is_old__pending_status(
+#     database, arrange, set_datetime, delta, capsys, patch, get_json_obj, status, set_status
+# ):
+#     set_status("PENDING")
+
+#     patch(clean_older_tasks=False, rerun_pending_tasks=True, daily_report=False)
+
+#     utc_now = timezone.now()
+#     set_datetime(utc_now)
+
+#     model = arrange(2, {"last_run": utc_now - delta, "status": status})
+
+#     command = Command()
+#     res = command.handle()
+
+#     assert res is None
+#     assert database.list_of("task_manager.TaskManager") == get_json_obj(model.task_manager)
+#     assert tasks.mark_task_as_pending.delay.call_args_list == [call(1, force=True), call(2, force=True)]
+
+#     captured = capsys.readouterr()
+#     assert captured.out == "Rerunning TaskManager's 1, 2\n"
+#     assert captured.err == ""
+#     assert AsyncResult.revoke.call_args_list == [call(terminate=True), call(terminate=True)]
+#     assert AsyncResult.__init__.call_args_list == [call(str(task_manager.id)) for task_manager in model.task_manager]
 
 
 # When: 0 ScheduledTask's
