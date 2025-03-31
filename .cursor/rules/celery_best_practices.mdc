@@ -1,0 +1,47 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Celery Best Practices
+
+## Task Design
+
+- Use explicit names for tasks: `app.task(name='my_app.tasks.my_task')`
+- Keep tasks small and focused
+- Implement proper error handling and retries
+- Use task timeouts to prevent hanging tasks
+- Implement task idempotency
+- Avoid async code as possible
+- Each task must handle only an instance of a model, do not iterate `Model.objects.filter(...)`
+
+## Configuration
+
+- Set reasonable task time limits
+- Configure dedicated queues for different task types
+- Use task routing for better resource management
+- Enable task events for monitoring
+- Configure result backend appropriately
+
+## Performance
+
+- Use task chunks for batch processing
+- Implement rate limiting when needed
+- Monitor queue lengths
+- Use prefetch multiplier correctly
+- Consider using task compression
+
+## Monitoring
+
+- Set up Flower for monitoring
+- Implement proper logging
+- Use task signals for tracking
+- Monitor worker processes
+- Track task execution times
+
+## Error Handling
+
+- Implement max_retries and retry_backoff
+- Use task error callbacks
+- Log task failures appropriately
+- Handle task revocation gracefully

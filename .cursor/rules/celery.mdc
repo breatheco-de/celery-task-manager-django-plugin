@@ -1,0 +1,34 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Celery Rules
+
+## Task Organization
+- Tasks must be organized in a `tasks` module within each app
+- Task names must follow pattern: `<app_name>.<task_name>`
+- Each task must have explicit queue assignment
+- Implement retry policies for network-dependent tasks
+- Use task versioning for long-running tasks
+
+## Worker Configuration
+- Use dedicated workers per queue type
+- Configure memory limits per worker
+- Set concurrency based on task type
+- Enable worker heartbeat monitoring
+- Configure task timeouts appropriately
+
+## Task Implementation
+- Use shared_task decorator for reusable apps
+- Add task description in docstring
+- Include expected runtime in task metadata
+- Implement proper status tracking
+- Use TaskManager model for task state management
+
+## Monitoring Rules
+- All tasks must emit status events
+- Implement task progress tracking via TaskManager
+- Log task start/end times
+- Track task memory usage
+- Use TaskWatcher for notification management

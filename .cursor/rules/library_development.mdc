@@ -1,0 +1,46 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Framework/Library Development Best Practices
+
+## Architecture
+
+- Follow SOLID principles
+- Design for extensibility
+- Use dependency injection
+- Implement plugin systems when appropriate
+- Keep core functionality separate from extensions
+
+## API Design
+
+- Create consistent and intuitive APIs
+- Follow semantic versioning
+- Document all public interfaces
+- Provide clear deprecation notices
+- Design for backward compatibility
+
+## Documentation
+
+- Maintain comprehensive API documentation
+- Include usage examples
+- Document configuration options
+- Provide migration guides
+- Include contribution guidelines
+
+## Testing
+
+- Achieve high test coverage
+- Include integration tests
+- Test edge cases
+- Provide test utilities for users
+- Document testing procedures
+
+## Distribution
+
+- Use proper packaging tools
+- Include type hints
+- Support multiple Python versions
+- Minimize dependencies
+- Use CI/CD pipelines
