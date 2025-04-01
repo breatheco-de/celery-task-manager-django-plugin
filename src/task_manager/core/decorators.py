@@ -16,7 +16,7 @@ from .settings import settings
 # from task_manager.core.constants import DuplicationPolicy
 
 
-__all__ = ["Task"]
+__all__ = ["Task", "TaskManager"]
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,6 @@ except ImportError:
 class TaskManager:
     current_page: Optional[int]
     total_pages: Optional[int]
-    priority: Optional[int]
     attempts: int
 
     task_module: str
@@ -48,9 +47,11 @@ class TaskManager:
     arguments: dict[Any, Any]
     status: str
     status_message: Optional[str]
-    task_id: str
+    task_id: Optional[str]
+    priority: Optional[int]
 
     killed: bool
+    fixed: bool
     last_run: datetime
 
     started_at: Optional[datetime]
@@ -74,6 +75,7 @@ class Task(object):
         self.reverse = kwargs.pop("reverse", None)
         self.bind = kwargs.get("bind", False)
         self.priority = kwargs.pop("priority", settings["DEFAULT"])
+        kwargs["ignore_result"] = kwargs.pop("ignore_result", True)
         # self.duplication_policy = kwargs.pop("duplication_policy", settings["DUPLICATION_POLICY"])
         # if self.duplication_policy is not None and self.duplication_policy not in [x.value for x in DuplicationPolicy]:
         #     raise ValueError(
@@ -193,23 +195,36 @@ class Task(object):
 
             update = {}
 
-            if not created and x.status == "SCHEDULED":
-                update["started_at"] = timezone.now()
-                update["status"] = "PENDING"
-
-            if not created:
-                update["current_page"] = page + 1
-                update["last_run"] = last_run
-
-                if attempts:
-                    update["attempts"] = attempts + 1
-
-                self._update_task_manager(x, **update)
-                update = {}
+            if created:
+                result = self.schedule(task_module, task_name, args, kwargs)
+                self._update_task_manager(x, task_id=result.id)
+                return
 
             if x.status in ["CANCELLED", "REVERSED", "PAUSED", "ABORTED", "DONE"]:
                 self._update_task_manager(x, killed=True)
                 return
+
+            if x.status == "SCHEDULED":
+                update["started_at"] = timezone.now()
+                update["status"] = "PENDING"
+
+            if attempts:
+                update["attempts"] = attempts + 1
+                current_page = page
+
+            else:
+                update["current_page"] = page + 1
+                current_page = update["current_page"]
+
+            update["last_run"] = last_run
+
+            # Add safety check for maximum pages
+            if current_page > x.total_pages:
+                update["status"] = "ERROR"
+                update["status_message"] = f"Task exceeded maximum pages ({current_page}/{x.total_pages})"
+
+            self._update_task_manager(x, **update)
+            update = {}
 
             if self.bind:
                 t = args[0]
@@ -221,7 +236,7 @@ class Task(object):
                 with self._get_transaction_context(x):
                     self.transaction_id = self._get_transaction_id(x)
                     try:
-                        res = self._execute(x, function, task_module, task_name, *args, **kwargs)
+                        res = self._execute(x, function, *args, **kwargs)
 
                     except Exception as e:
                         error = e
@@ -233,12 +248,12 @@ class Task(object):
 
             else:
                 try:
-                    res = self._execute(x, function, task_module, task_name, *args, **kwargs)
+                    res = self._execute(x, function, *args, **kwargs)
 
                 except Exception as e:
                     return self._manage_exceptions(e, x, arguments, *args, **kwargs)
 
-            if x.total_pages == x.current_page:
+            if x.total_pages == current_page:
                 self._update_task_manager(x, status="DONE")
 
             return res
@@ -246,15 +261,9 @@ class Task(object):
         self.instance = self.parent_decorator(wrapper)
         return self.instance
 
-    def _execute(self, x: TaskManager, function: Callable, task_module: str, task_name: str, *args, **kwargs):
-        if x.status == "SCHEDULED":
-            result = self.schedule(task_module, task_name, args, kwargs)
-            self._update_task_manager(x, task_id=result.id)
-            return
-
-        else:
-            self._update_task_manager(x, status_message="")
-            return function(*args, **kwargs)
+    def _execute(self, x: TaskManager, function: Callable, *args, **kwargs):
+        self._update_task_manager(x, status_message="")
+        return function(*args, **kwargs)
 
     def _manage_exceptions(self, e: Exception, x: TaskManager, arguments: dict, *args, **kwargs):
         error = None

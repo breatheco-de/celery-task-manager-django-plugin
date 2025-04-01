@@ -654,7 +654,7 @@ def test_two_task_managers__it_must_be_killed(database, get_json_obj, setup, utc
             **get_json_obj(model.task_manager[0]),
             "status": status,
             "last_run": utc_now,
-            "current_page": 1,
+            "current_page": 0,
             "total_pages": 2,
             "killed": True,
         },
