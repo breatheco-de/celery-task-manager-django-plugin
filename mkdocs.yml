@@ -32,6 +32,7 @@ nav:
       - "getting-started/schedule-tasks.md"
       - "getting-started/emisors.md"
   - Changelog:
+      - "changelog/v1.11.4.md"
       - "changelog/v1.11.3.md"
       - "changelog/v1.10.0.md"
       - "changelog/v1.8.0.md"

@@ -66,7 +66,8 @@ class AproxPaginator(Paginator):
         has_last = hasattr(self.object_list, "last") and callable(self.object_list.last)
         has_only = hasattr(self.object_list, "only") and callable(self.object_list.only)
         if has_first and has_last and has_only:
-            return self.object_list.only("pk").last().pk - self.object_list.only("pk").first().pk + 1
+            v = self.object_list.order_by("pk").last().pk - self.object_list.order_by("pk").first().pk + 1
+            return v / self.per_page
         return 999999999
 
 
